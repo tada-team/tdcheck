@@ -1,0 +1,8 @@
+listen: 127.0.0.1:8789
+servers:
+  - host: web.tada.team
+    token: xxxx
+  - host: stage.tada.team
+    token: xxxx
+  - host: demo.tada.team
+    token: xxxx
