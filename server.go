@@ -24,13 +24,18 @@ func (s Server) Watch(rtr *mux.Router) {
 	path := "/" + s.Host
 	log.Println("watch:", path)
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
-		io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apipingDuration.Milliseconds()))
+		if s.ApiPingInterval > 0 {
+			io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
+			io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apipingDuration.Milliseconds()))
+		}
 	})
 }
 
 func (s *Server) ping() {
-	interval := 5 * time.Second
+	interval := s.ApiPingInterval
+	if interval == 0 {
+		return
+	}
 	for range time.Tick(interval) {
 		start := time.Now()
 
