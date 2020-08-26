@@ -1,4 +1,4 @@
-package tdcheck
+package main
 
 import (
 	"crypto/tls"

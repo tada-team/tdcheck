@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/tada-team/tdcheck"
-
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v2"
 )
@@ -25,9 +23,9 @@ func main() {
 	}
 
 	var config struct {
-		Listen          string           `yaml:"listen"`
-		ApiPingInterval time.Duration    `yaml:"api_ping_interval"`
-		Servers         []tdcheck.Server `yaml:"servers"`
+		Listen          string        `yaml:"listen"`
+		ApiPingInterval time.Duration `yaml:"api_ping_interval"`
+		Servers         []Server      `yaml:"servers"`
 	}
 
 	if err := yaml.Unmarshal(b, &config); err != nil {
