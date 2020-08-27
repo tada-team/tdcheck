@@ -33,6 +33,15 @@ type Server struct {
 	wsFails              int
 }
 
+func (s Server) tdClient(token string, timeout time.Duration) TdClient {
+	return TdClient{
+		Host:    s.Host,
+		Verbose: s.Verbose,
+		Token:   token,
+		Timeout: timeout,
+	}
+}
+
 func (s Server) apiPingEnabled() bool {
 	return s.ApiPingInterval > 0
 }
@@ -86,11 +95,7 @@ func (s *Server) ping() {
 	}
 
 	interval := s.ApiPingInterval
-	client := TdClient{
-		Host:    s.Host,
-		Timeout: interval,
-		Verbose: s.Verbose,
-	}
+	client := s.tdClient(s.BobToken, interval)
 
 	for range time.Tick(interval) {
 		start := time.Now()
@@ -122,13 +127,7 @@ func (s *Server) doCheckMessage() error {
 	errChan := make(chan error)
 
 	interval := s.CheckMessageInterval
-
-	aliceClient := TdClient{
-		Host:    s.Host,
-		Token:   s.AliceToken,
-		Verbose: s.Verbose,
-		Timeout: interval,
-	}
+	aliceClient := s.tdClient(s.AliceToken, interval)
 	aliceJid, err := aliceClient.MyJID(s.TestTeam)
 	if err != nil {
 		return err
@@ -140,12 +139,7 @@ func (s *Server) doCheckMessage() error {
 		return err
 	}
 
-	bobClient := TdClient{
-		Host:    s.Host,
-		Token:   s.BobToken,
-		Verbose: s.Verbose,
-		Timeout: interval,
-	}
+	bobClient := s.tdClient(s.BobToken, interval)
 	bobJid, err := bobClient.MyJID(s.TestTeam)
 	if err != nil {
 		return err
