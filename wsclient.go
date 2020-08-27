@@ -56,6 +56,10 @@ func (w *wsClient) deleteMessage(uid string) {
 	})
 }
 
+func (w *wsClient) ping() string {
+	return w.send("client.ping", params{})
+}
+
 var wsTimeout = errors.New("Timeout")
 
 type message struct {
@@ -71,6 +75,13 @@ type serverMessageUpdated struct {
 	} `json:"params"`
 }
 
+type serverConfirm struct {
+	Name   string `json:"event"`
+	Params struct {
+		ConfirmId string `json:"confirm_id"`
+	} `json:"params"`
+}
+
 func (w *wsClient) waitForMessage(timeout time.Duration) (message, bool, error) {
 	v := serverMessageUpdated{}
 	err := w.waitFor("server.message.updated", timeout, &v)
@@ -78,6 +89,15 @@ func (w *wsClient) waitForMessage(timeout time.Duration) (message, bool, error) 
 		return message{}, false, err
 	}
 	return v.Params.Messages[0], v.Params.Delayed, nil
+}
+
+func (w *wsClient) waitForConfirm(timeout time.Duration) (string, error) {
+	v := serverConfirm{}
+	err := w.waitFor("server.confirm", timeout, &v)
+	if err != nil {
+		return "", err
+	}
+	return v.Params.ConfirmId, nil
 }
 
 func (w *wsClient) waitFor(name string, timeout time.Duration, v interface{}) error {
@@ -100,11 +120,14 @@ func (w *wsClient) waitFor(name string, timeout time.Duration, v interface{}) er
 	}
 }
 
-func (w *wsClient) send(name string, params params) {
+func (w *wsClient) send(name string, params params) string {
+	uid := uuid.New().String()
 	w.outbox <- event{
-		Name:   name,
-		Params: params,
+		Name:      name,
+		Params:    params,
+		ConfirmId: uid,
 	}
+	return uid
 }
 
 func (w *wsClient) outboxLoop() {

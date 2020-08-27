@@ -3,6 +3,6 @@ servers:
   - host: myserver.tada.team
     api_ping_interval: 30s
     check_message_interval: 30s
-    check_message_team: xxxx
+    test_team: xxxx
     alice_token: xxxx
     bob_token: xxxx
