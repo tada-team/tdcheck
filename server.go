@@ -11,7 +11,10 @@ import (
 	"github.com/tada-team/kozma"
 )
 
-const maxInterval = 10
+const (
+	maxInterval   = 10
+	retryInterval = time.Second
+)
 
 type Server struct {
 	Host string `yaml:"host"`
@@ -118,6 +121,7 @@ func (s *Server) checkMessage() {
 			if err := s.doCheckMessage(); err != nil {
 				s.wsFails++
 				log.Printf("%s check: fatal #%d, %s", s, s.wsFails, err)
+				time.Sleep(retryInterval)
 			}
 		}
 	}
@@ -215,6 +219,7 @@ func (s Server) wsPing() {
 			if err := s.doWsPing(); err != nil {
 				s.wsFails++
 				log.Printf("%s ws ping: fatal #%d, %s", s, s.wsFails, err)
+				time.Sleep(retryInterval)
 			}
 		}
 	}
