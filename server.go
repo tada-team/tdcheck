@@ -120,10 +120,15 @@ func (s *Server) checkMessage() {
 
 		for {
 			msg, err := aliceWs.waitForMessage(interval)
+			if err == wsTimeout {
+				log.Printf("%s check: alice got timeout on %s", s, messageId)
+				s.echoMessageDuration = interval
+				break
+			}
 			if err != nil {
 				log.Panicln(err)
 			}
-			log.Printf("%s check: alice got %s", s, messageId)
+			log.Printf("%s check: alice got %s", s, msg.MessageId)
 			s.echoMessageDuration = time.Since(start)
 			if msg.MessageId == messageId {
 				break
@@ -132,6 +137,11 @@ func (s *Server) checkMessage() {
 
 		for {
 			msg, err := bobWs.waitForMessage(interval)
+			if err == wsTimeout {
+				log.Printf("%s check: bob got timeout on %s", s, messageId)
+				s.checkMessageDuration = interval
+				break
+			}
 			if err != nil {
 				log.Panicln(err)
 			}
