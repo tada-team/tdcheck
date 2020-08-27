@@ -27,7 +27,7 @@ type Server struct {
 }
 
 func (s Server) apiPingEnabled() bool {
-	return s.apiPingDuration > 0
+	return s.ApiPingInterval > 0
 }
 
 func (s Server) checkMessageEnabled() bool {
