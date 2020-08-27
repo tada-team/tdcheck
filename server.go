@@ -24,6 +24,7 @@ type Server struct {
 
 	AliceToken string `yaml:"alice_token"`
 	BobToken   string `yaml:"bob_token"`
+	Verbose    bool   `yaml:"verbose"`
 }
 
 func (s Server) apiPingEnabled() bool {
@@ -34,7 +35,9 @@ func (s Server) checkMessageEnabled() bool {
 	return s.CheckMessageInterval > 0 && s.CheckMessageTeam != "" && s.AliceToken != "" && s.BobToken != ""
 }
 
-func (s Server) String() string { return s.Host }
+func (s Server) String() string {
+	return fmt.Sprintf("[%s]", s.Host)
+}
 
 func (s Server) Watch(rtr *mux.Router) {
 	go s.ping()
@@ -63,7 +66,11 @@ func (s *Server) ping() {
 	}
 
 	interval := s.ApiPingInterval
-	client := TdClient{Host: s.Host, Timeout: interval}
+	client := TdClient{
+		Host:    s.Host,
+		Timeout: interval,
+		Verbose: s.Verbose,
+	}
 
 	for range time.Tick(interval) {
 		start := time.Now()
@@ -87,7 +94,12 @@ func (s *Server) checkMessage() {
 
 	interval := s.CheckMessageInterval
 
-	aliceClient := TdClient{Host: s.Host, Timeout: interval, Token: s.AliceToken}
+	aliceClient := TdClient{
+		Host:    s.Host,
+		Token:   s.AliceToken,
+		Verbose: s.Verbose,
+		Timeout: interval,
+	}
 	aliceJid, err := aliceClient.MyJID(s.CheckMessageTeam)
 	if err != nil {
 		log.Panicln(err)
@@ -99,7 +111,12 @@ func (s *Server) checkMessage() {
 		log.Panicln(err)
 	}
 
-	bobClient := TdClient{Host: s.Host, Timeout: interval, Token: s.BobToken}
+	bobClient := TdClient{
+		Host:    s.Host,
+		Token:   s.BobToken,
+		Verbose: s.Verbose,
+		Timeout: interval,
+	}
 	bobJid, err := bobClient.MyJID(s.CheckMessageTeam)
 	if err != nil {
 		log.Panicln(err)
@@ -119,7 +136,7 @@ func (s *Server) checkMessage() {
 		log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
 		for {
-			msg, err := aliceWs.waitForMessage(interval)
+			msg, delayed, err := aliceWs.waitForMessage(interval)
 			if err == wsTimeout {
 				log.Printf("%s check: alice got timeout on %s", s, messageId)
 				s.echoMessageDuration = interval
@@ -128,15 +145,19 @@ func (s *Server) checkMessage() {
 			if err != nil {
 				log.Panicln(err)
 			}
+			if !delayed {
+				continue
+			}
 			log.Printf("%s check: alice got %s", s, msg.MessageId)
 			s.echoMessageDuration = time.Since(start)
 			if msg.MessageId == messageId {
+				log.Printf("%s check: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
 				break
 			}
 		}
 
 		for {
-			msg, err := bobWs.waitForMessage(interval)
+			msg, delayed, err := bobWs.waitForMessage(interval)
 			if err == wsTimeout {
 				log.Printf("%s check: bob got timeout on %s", s, messageId)
 				s.checkMessageDuration = interval
@@ -145,9 +166,13 @@ func (s *Server) checkMessage() {
 			if err != nil {
 				log.Panicln(err)
 			}
+			if delayed {
+				continue
+			}
 			log.Printf("%s check: bob got %s: %s", s, msg.MessageId, msg.PushText)
 			s.checkMessageDuration = time.Since(start)
 			if msg.MessageId == messageId {
+				log.Printf("%s check: echo %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
 				break
 			}
 		}

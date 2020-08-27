@@ -67,16 +67,17 @@ type serverMessageUpdated struct {
 	Name   string `json:"event"`
 	Params struct {
 		Messages []message `json:"messages"`
+		Delayed  bool      `json:"delayed"`
 	} `json:"params"`
 }
 
-func (w *wsClient) waitForMessage(timeout time.Duration) (message, error) {
+func (w *wsClient) waitForMessage(timeout time.Duration) (message, bool, error) {
 	v := serverMessageUpdated{}
 	err := w.waitFor("server.message.updated", timeout, &v)
 	if err != nil {
-		return message{}, err
+		return message{}, false, err
 	}
-	return v.Params.Messages[0], nil
+	return v.Params.Messages[0], v.Params.Delayed, nil
 }
 
 func (w *wsClient) waitFor(name string, timeout time.Duration, v interface{}) error {
