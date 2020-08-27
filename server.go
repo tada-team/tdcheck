@@ -95,15 +95,16 @@ func (s *Server) ping() {
 func (s *Server) checkMessage() {
 	if s.checkMessageEnabled() {
 		for {
-			err := s.doCheckMessage()
-			if err != nil {
-				log.Println("check: fatal:", err)
+			if err := s.doCheckMessage(); err != nil {
 				s.wsFails++
+				log.Printf("%s check: fatal #%d, %s", s, s.wsFails, err)
 			}
 		}
 	}
 }
 func (s *Server) doCheckMessage() error {
+	errChan := make(chan error)
+
 	interval := s.CheckMessageInterval
 
 	aliceClient := TdClient{
@@ -116,9 +117,9 @@ func (s *Server) doCheckMessage() error {
 	if err != nil {
 		return err
 	}
-	log.Println("check: alice jid:", aliceJid)
+	log.Printf("%s check: alice jid: %s", s, aliceJid)
 
-	aliceWs, err := aliceClient.WsClient(s.CheckMessageTeam, nil)
+	aliceWs, err := aliceClient.WsClient(s.CheckMessageTeam, func(err error) { errChan <- err })
 	if err != nil {
 		return err
 	}
@@ -133,64 +134,69 @@ func (s *Server) doCheckMessage() error {
 	if err != nil {
 		return err
 	}
-	log.Println("check: bob jid:", bobJid)
+	log.Printf("%s check: bob jid: %s", s, bobJid)
 
-	bobWs, err := bobClient.WsClient(s.CheckMessageTeam, nil)
+	bobWs, err := bobClient.WsClient(s.CheckMessageTeam, func(err error) { errChan <- err })
 	if err != nil {
 		return err
 	}
 
-	for range time.Tick(interval) {
-		start := time.Now()
+	go func() {
+		for range time.Tick(interval) {
+			start := time.Now()
 
-		text := kozma.Say()
-		messageId := aliceWs.sendPlainMessage(bobJid, text)
-		log.Printf("%s check: alice send %s: %s", s, messageId, text)
+			text := kozma.Say()
+			messageId := aliceWs.sendPlainMessage(bobJid, text)
+			log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
-		for {
-			msg, delayed, err := aliceWs.waitForMessage(interval)
-			if err == wsTimeout {
-				log.Printf("%s check: alice got timeout on %s", s, messageId)
-				s.echoMessageDuration = interval
-				break
+			for {
+				msg, delayed, err := aliceWs.waitForMessage(interval)
+				if err == wsTimeout {
+					log.Printf("%s check: alice got timeout on %s", s, messageId)
+					s.echoMessageDuration = interval
+					break
+				}
+				if err != nil {
+					errChan <- err
+					return
+				}
+				if !delayed {
+					continue
+				}
+				log.Printf("%s check: alice got %s", s, msg.MessageId)
+				s.echoMessageDuration = time.Since(start)
+				if msg.MessageId == messageId {
+					log.Printf("%s check: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
+					break
+				}
 			}
-			if err != nil {
-				return err
+
+			for {
+				msg, delayed, err := bobWs.waitForMessage(interval)
+				if err == wsTimeout {
+					log.Printf("%s check: bob got timeout on %s", s, messageId)
+					s.checkMessageDuration = interval
+					break
+				}
+				if err != nil {
+					errChan <- err
+					return
+				}
+				if delayed {
+					continue
+				}
+				log.Printf("%s check: bob got %s: %s", s, msg.MessageId, msg.PushText)
+				s.checkMessageDuration = time.Since(start)
+				if msg.MessageId == messageId {
+					log.Printf("%s check: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
+					break
+				}
 			}
-			if !delayed {
-				continue
-			}
-			log.Printf("%s check: alice got %s", s, msg.MessageId)
-			s.echoMessageDuration = time.Since(start)
-			if msg.MessageId == messageId {
-				log.Printf("%s check: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
-				break
-			}
+
+			log.Printf("%s check: alice drop %s", s, messageId)
+			aliceWs.deleteMessage(messageId)
 		}
+	}()
 
-		for {
-			msg, delayed, err := bobWs.waitForMessage(interval)
-			if err == wsTimeout {
-				log.Printf("%s check: bob got timeout on %s", s, messageId)
-				s.checkMessageDuration = interval
-				break
-			}
-			if err != nil {
-				return err
-			}
-			if delayed {
-				continue
-			}
-			log.Printf("%s check: bob got %s: %s", s, msg.MessageId, msg.PushText)
-			s.checkMessageDuration = time.Since(start)
-			if msg.MessageId == messageId {
-				log.Printf("%s check: echo %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
-				break
-			}
-		}
-
-		log.Printf("%s check: alice drop %s", s, messageId)
-		aliceWs.deleteMessage(messageId)
-	}
-	return nil
+	return <-errChan
 }
