@@ -163,7 +163,7 @@ func (s *Server) doCheckMessage() error {
 			messageId := aliceWs.sendPlainMessage(bobJid, text)
 			log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
-			for s.echoMessageDuration < maxInterval {
+			for time.Since(start) < maxInterval {
 				msg, delayed, err := aliceWs.waitForMessage(interval)
 				s.echoMessageDuration = time.Since(start)
 				if err == wsTimeout {
@@ -184,7 +184,7 @@ func (s *Server) doCheckMessage() error {
 				}
 			}
 
-			for s.checkMessageDuration < maxInterval {
+			for time.Since(start) < maxInterval {
 				msg, delayed, err := bobWs.waitForMessage(interval)
 				s.checkMessageDuration = time.Since(start)
 				if err == wsTimeout {
@@ -240,7 +240,7 @@ func (s Server) doWsPing() error {
 			start := time.Now()
 			uid := aliceWs.ping()
 			log.Printf("%s ws ping: alice send ping %s", s, uid)
-			for s.wsPingDuration < maxInterval {
+			for time.Since(start) < maxInterval {
 				confirmId, err := aliceWs.waitForConfirm(interval)
 				s.wsPingDuration = time.Since(start)
 				if err != nil {
