@@ -151,9 +151,9 @@ func (s *Server) doCheckMessage() error {
 
 			for {
 				msg, delayed, err := aliceWs.waitForMessage(interval)
+				s.echoMessageDuration = time.Since(start)
 				if err == wsTimeout {
 					log.Printf("%s check: alice got timeout on %s", s, messageId)
-					s.echoMessageDuration = interval
 					break
 				}
 				if err != nil {
@@ -164,7 +164,6 @@ func (s *Server) doCheckMessage() error {
 					continue
 				}
 				log.Printf("%s check: alice got %s", s, msg.MessageId)
-				s.echoMessageDuration = time.Since(start)
 				if msg.MessageId == messageId {
 					log.Printf("%s check: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
 					break
@@ -173,9 +172,9 @@ func (s *Server) doCheckMessage() error {
 
 			for {
 				msg, delayed, err := bobWs.waitForMessage(interval)
+				s.checkMessageDuration = time.Since(start)
 				if err == wsTimeout {
 					log.Printf("%s check: bob got timeout on %s", s, messageId)
-					s.checkMessageDuration = interval
 					break
 				}
 				if err != nil {
@@ -186,7 +185,6 @@ func (s *Server) doCheckMessage() error {
 					continue
 				}
 				log.Printf("%s check: bob got %s: %s", s, msg.MessageId, msg.PushText)
-				s.checkMessageDuration = time.Since(start)
 				if msg.MessageId == messageId {
 					log.Printf("%s check: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
 					break
