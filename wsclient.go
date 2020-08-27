@@ -14,9 +14,10 @@ import (
 type params map[string]interface{}
 
 type event struct {
-	Name   string `json:"event"`
-	Params params `json:"params"`
-	raw    []byte
+	Name      string `json:"event"`
+	Params    params `json:"params"`
+	ConfirmId string `json:"confirm_id,omitempty"`
+	raw       []byte
 }
 
 type wsClient struct {
@@ -138,6 +139,12 @@ func (w wsClient) inboxLoop() {
 		if err := json.Unmarshal(data, &v); err != nil {
 			w.fail <- errors.Wrap(err, "json fail")
 			return
+		}
+
+		if v.ConfirmId != "" {
+			w.send("client.confirm", params{
+				"confirm_id": v.ConfirmId,
+			})
 		}
 
 		v.raw = data
