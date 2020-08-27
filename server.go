@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	maxInterval   = 10
+	maxInterval   = time.Minute
 	retryInterval = time.Second
 )
 
@@ -163,7 +163,7 @@ func (s *Server) doCheckMessage() error {
 			messageId := aliceWs.sendPlainMessage(bobJid, text)
 			log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
-			for s.echoMessageDuration < interval*maxInterval {
+			for s.echoMessageDuration < maxInterval {
 				msg, delayed, err := aliceWs.waitForMessage(interval)
 				s.echoMessageDuration = time.Since(start)
 				if err == wsTimeout {
@@ -184,7 +184,7 @@ func (s *Server) doCheckMessage() error {
 				}
 			}
 
-			for s.checkMessageDuration < interval*maxInterval {
+			for s.checkMessageDuration < maxInterval {
 				msg, delayed, err := bobWs.waitForMessage(interval)
 				s.checkMessageDuration = time.Since(start)
 				if err == wsTimeout {
@@ -240,7 +240,7 @@ func (s Server) doWsPing() error {
 			start := time.Now()
 			uid := aliceWs.ping()
 			log.Printf("%s ws ping: alice send ping %s", s, uid)
-			for s.wsPingDuration < interval*maxInterval {
+			for s.wsPingDuration < maxInterval {
 				s.wsPingDuration = time.Since(start)
 				confirmId, err := aliceWs.waitForConfirm(interval)
 				if err != nil {
