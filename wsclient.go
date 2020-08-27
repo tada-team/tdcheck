@@ -5,9 +5,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
 )
 
 type params map[string]interface{}
@@ -34,7 +35,7 @@ func (w *wsClient) sendPlainMessage(to, text string) string {
 		Type string `json:"type"`
 	}
 
-	uid := uuid.NewV4().String()
+	uid := uuid.New().String()
 
 	w.send("client.message.updated", params{
 		"message_id": uid,
