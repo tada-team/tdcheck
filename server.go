@@ -224,14 +224,7 @@ func (s Server) doWsPing() error {
 	errChan := make(chan error)
 
 	interval := s.WsPingInterval
-
-	aliceClient := TdClient{
-		Host:    s.Host,
-		Token:   s.AliceToken,
-		Verbose: s.Verbose,
-		Timeout: interval,
-	}
-
+	aliceClient := s.tdClient(s.AliceToken, interval)
 	aliceWs, err := aliceClient.WsClient(s.TestTeam, func(err error) { errChan <- err })
 	if err != nil {
 		return err
