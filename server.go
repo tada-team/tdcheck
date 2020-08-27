@@ -62,6 +62,10 @@ func (s Server) Watch(rtr *mux.Router) {
 			io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Milliseconds()))
 		}
+		if s.wsPingEnabled() {
+			io.WriteString(w, "# TYPE tdcheck_ws_api_ping_ns gauge\n")
+			io.WriteString(w, fmt.Sprintf("tdcheck_ws_api_ping_ns{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Nanoseconds()))
+		}
 		if s.checkMessageEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", s.Host, s.echoMessageDuration.Milliseconds()))
