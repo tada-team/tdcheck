@@ -241,8 +241,8 @@ func (s Server) doWsPing() error {
 			uid := aliceWs.ping()
 			log.Printf("%s ws ping: alice send ping %s", s, uid)
 			for s.wsPingDuration < maxInterval {
-				s.wsPingDuration = time.Since(start)
 				confirmId, err := aliceWs.waitForConfirm(interval)
+				s.wsPingDuration = time.Since(start)
 				if err != nil {
 					errChan <- err
 					return
