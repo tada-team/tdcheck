@@ -21,6 +21,7 @@ type Server struct {
 	CheckMessageTeam     string        `yaml:"check_message_team"`
 	echoMessageDuration  time.Duration
 	checkMessageDuration time.Duration
+	wsFails              int
 
 	AliceToken string `yaml:"alice_token"`
 	BobToken   string `yaml:"bob_token"`
@@ -54,8 +55,12 @@ func (s Server) Watch(rtr *mux.Router) {
 		if s.checkMessageEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", s.Host, s.echoMessageDuration.Milliseconds()))
+
 			io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", s.Host, s.checkMessageDuration.Milliseconds()))
+
+			io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
+			io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, s.wsFails))
 		}
 	})
 }
@@ -88,10 +93,17 @@ func (s *Server) ping() {
 }
 
 func (s *Server) checkMessage() {
-	if !s.checkMessageEnabled() {
-		return
+	if s.checkMessageEnabled() {
+		for {
+			err := s.doCheckMessage()
+			if err != nil {
+				log.Println("check: fatal:", err)
+				s.wsFails++
+			}
+		}
 	}
-
+}
+func (s *Server) doCheckMessage() error {
 	interval := s.CheckMessageInterval
 
 	aliceClient := TdClient{
@@ -102,13 +114,13 @@ func (s *Server) checkMessage() {
 	}
 	aliceJid, err := aliceClient.MyJID(s.CheckMessageTeam)
 	if err != nil {
-		log.Panicln(err)
+		return err
 	}
 	log.Println("check: alice jid:", aliceJid)
 
 	aliceWs, err := aliceClient.WsClient(s.CheckMessageTeam, nil)
 	if err != nil {
-		log.Panicln(err)
+		return err
 	}
 
 	bobClient := TdClient{
@@ -119,13 +131,13 @@ func (s *Server) checkMessage() {
 	}
 	bobJid, err := bobClient.MyJID(s.CheckMessageTeam)
 	if err != nil {
-		log.Panicln(err)
+		return err
 	}
 	log.Println("check: bob jid:", bobJid)
 
 	bobWs, err := bobClient.WsClient(s.CheckMessageTeam, nil)
 	if err != nil {
-		log.Panicln(err)
+		return err
 	}
 
 	for range time.Tick(interval) {
@@ -143,7 +155,7 @@ func (s *Server) checkMessage() {
 				break
 			}
 			if err != nil {
-				log.Panicln(err)
+				return err
 			}
 			if !delayed {
 				continue
@@ -164,7 +176,7 @@ func (s *Server) checkMessage() {
 				break
 			}
 			if err != nil {
-				log.Panicln(err)
+				return err
 			}
 			if delayed {
 				continue
@@ -180,4 +192,5 @@ func (s *Server) checkMessage() {
 		log.Printf("%s check: alice drop %s", s, messageId)
 		aliceWs.deleteMessage(messageId)
 	}
+	return nil
 }
