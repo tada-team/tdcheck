@@ -114,8 +114,9 @@ func (s *Server) checkMessage() {
 	for range time.Tick(interval) {
 		start := time.Now()
 
-		messageId := aliceWs.sendPlainMessage(bobJid, kozma.Say())
-		log.Printf("%s check: alice send %s", s, messageId)
+		text := kozma.Say()
+		messageId := aliceWs.sendPlainMessage(bobJid, text)
+		log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
 		for {
 			msg, err := aliceWs.waitForMessage(interval)
@@ -134,7 +135,7 @@ func (s *Server) checkMessage() {
 			if err != nil {
 				log.Panicln(err)
 			}
-			log.Printf("%s check: bob got %s", s, messageId)
+			log.Printf("%s check: bob got %s: %s", s, msg.MessageId, msg.PushText)
 			s.checkMessageDuration = time.Since(start)
 			if msg.MessageId == messageId {
 				break
