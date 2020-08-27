@@ -11,10 +11,7 @@ import (
 	"github.com/tada-team/kozma"
 )
 
-const (
-	maxInterval   = time.Minute
-	retryInterval = time.Second
-)
+const retryInterval = time.Second
 
 type Server struct {
 	Host string `yaml:"host"`
@@ -163,7 +160,7 @@ func (s *Server) doCheckMessage() error {
 			messageId := aliceWs.sendPlainMessage(bobJid, text)
 			log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
-			for time.Since(start) < maxInterval {
+			for time.Since(start) < interval {
 				msg, delayed, err := aliceWs.waitForMessage(interval)
 				s.echoMessageDuration = time.Since(start)
 				if err == wsTimeout {
@@ -184,7 +181,7 @@ func (s *Server) doCheckMessage() error {
 				}
 			}
 
-			for time.Since(start) < maxInterval {
+			for time.Since(start) < interval {
 				msg, delayed, err := bobWs.waitForMessage(interval)
 				s.checkMessageDuration = time.Since(start)
 				if err == wsTimeout {
@@ -240,7 +237,7 @@ func (s Server) doWsPing() error {
 			start := time.Now()
 			uid := aliceWs.ping()
 			log.Printf("%s ws ping: alice send ping %s", s, uid)
-			for time.Since(start) < maxInterval {
+			for time.Since(start) < interval {
 				confirmId, err := aliceWs.waitForConfirm(interval)
 				s.wsPingDuration = time.Since(start)
 				if err != nil {
