@@ -245,7 +245,7 @@ func (s Server) doWsPing() error {
 					return
 				}
 				if confirmId == uid {
-					log.Printf("%s ws ping: %s OK", s, s.wsPingDuration)
+					log.Printf("%s ws ping: %s OK", s, s.wsPingDuration.Truncate(time.Millisecond))
 					break
 				}
 			}
