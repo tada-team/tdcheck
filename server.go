@@ -7,11 +7,18 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/gorilla/mux"
 	"github.com/tada-team/kozma"
 )
 
-const retryInterval = time.Second
+const (
+	retryInterval = time.Second
+	maxTimeouts   = 10
+)
+
+var maxTimeoutsReached = errors.New("max timouts")
 
 type Server struct {
 	Host string `yaml:"host"`
@@ -152,6 +159,7 @@ func (s *Server) doCheckMessage() error {
 		return err
 	}
 
+	numTimouts := 0
 	go func() {
 		for range time.Tick(interval) {
 			start := time.Now()
@@ -165,6 +173,11 @@ func (s *Server) doCheckMessage() error {
 				s.echoMessageDuration = time.Since(start)
 				if err == wsTimeout {
 					log.Printf("%s check: alice got timeout on %s", s, messageId)
+					numTimouts++
+					if numTimouts > maxTimeouts {
+						errChan <- err
+						return
+					}
 					break
 				}
 				if err != nil {
@@ -186,6 +199,11 @@ func (s *Server) doCheckMessage() error {
 				s.checkMessageDuration = time.Since(start)
 				if err == wsTimeout {
 					log.Printf("%s check: bob got timeout on %s", s, messageId)
+					numTimouts++
+					if numTimouts > maxTimeouts {
+						errChan <- maxTimeoutsReached
+						return
+					}
 					break
 				}
 				if err != nil {
@@ -232,6 +250,7 @@ func (s Server) doWsPing() error {
 		return err
 	}
 
+	numTimouts := 0
 	go func() {
 		for range time.Tick(interval) {
 			start := time.Now()
@@ -240,6 +259,15 @@ func (s Server) doWsPing() error {
 			for time.Since(start) < interval {
 				confirmId, err := aliceWs.waitForConfirm(interval)
 				s.wsPingDuration = time.Since(start)
+				if err == wsTimeout {
+					log.Printf("%s ws ping: alice got ping timeout on %s", s, uid)
+					numTimouts++
+					if numTimouts > maxTimeouts {
+						errChan <- maxTimeoutsReached
+						return
+					}
+					break
+				}
 				if err != nil {
 					errChan <- err
 					return
