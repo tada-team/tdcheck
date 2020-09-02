@@ -228,7 +228,7 @@ func (s *Server) doCheckMessage() error {
 	return <-errChan
 }
 
-func (s Server) wsPing() {
+func (s *Server) wsPing() {
 	if s.wsPingEnabled() {
 		for {
 			if err := s.doWsPing(); err != nil {
@@ -240,7 +240,7 @@ func (s Server) wsPing() {
 	}
 }
 
-func (s Server) doWsPing() error {
+func (s *Server) doWsPing() error {
 	errChan := make(chan error)
 
 	interval := s.WsPingInterval
