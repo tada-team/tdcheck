@@ -44,6 +44,7 @@ user=www-data```
 6. Настроить отображение метрик `tdcheck_*` в Grafana
 
 ## grafana dashboard
+
 ```json
 {
   "annotations": {
