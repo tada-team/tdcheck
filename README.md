@@ -6,7 +6,7 @@
 
 2. Создать конфигурационный файл `/etc/tdcheck/default.yml` вида 
 
-```
+```yaml
 listen: 127.0.0.1:8789
 servers:
   - host: myserver.tada.team
@@ -21,7 +21,7 @@ servers:
 ...где `host` — адрес вашей инсталляции tada, `test_team` — uid тестовой команды, `alice_token` и `bob_token` — токены, полученные на первом шаге.
 
 3. Установить на сервер мониторинг, например, так: 
-```
+```bash
 sudo -H -u www-data go get -u github.com/tada-team/tdcheck
 ```
 
@@ -31,10 +31,12 @@ sudo -H -u www-data go get -u github.com/tada-team/tdcheck
 [program:tdcheck]
 command=/var/www/go/bin/tdcheck
 autorestart=true
-user=www-data```
+user=www-data
+```
 
 5. Прописать сбор метрики в /etc/prometheus/prometheus.yml
-```
+
+```yaml
   - job_name: tdcheck_my_server
     metrics_path: 'my.server'
     static_configs:
@@ -722,4 +724,5 @@ user=www-data```
   "title": "tdcheck",
   "uid": "G3qa4wNGz",
   "version": 31
-}```
+}
+```
