@@ -16,6 +16,7 @@ import (
 const (
 	retryInterval = time.Second
 	maxTimeouts   = 10
+	maxWsFails    = 120
 )
 
 var maxTimeoutsReached = errors.New("max timouts")
@@ -69,6 +70,7 @@ func (s Server) Watch(rtr *mux.Router) {
 	go s.ping()
 	go s.wsPing()
 	go s.checkMessage()
+	go s.paniker()
 
 	path := "/" + s.Host
 	log.Println("watch:", path)
@@ -281,4 +283,12 @@ func (s *Server) doWsPing() error {
 	}()
 
 	return <-errChan
+}
+
+func (s *Server) paniker() {
+	for range time.Tick(time.Second) {
+		if s.wsFails > maxWsFails {
+			log.Panicln("too many ws fails:", s.wsFails)
+		}
+	}
 }
