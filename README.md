@@ -110,7 +110,7 @@ user=www-data
       "steppedLine": false,
       "targets": [
         {
-          "expr": "tdcheck_ws_api_ping_ms",
+          "expr": "tdcheck_ws_ping_ms",
           "format": "time_series",
           "instant": false,
           "intervalFactor": 10,
