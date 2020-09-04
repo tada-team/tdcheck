@@ -15,6 +15,7 @@ import (
 
 const (
 	retryInterval = time.Second
+	wsFailsCheck  = 30 * time.Second
 	maxTimeouts   = 10
 	maxWsFails    = 120
 )
@@ -286,9 +287,12 @@ func (s *Server) doWsPing() error {
 }
 
 func (s *Server) paniker() {
-	for range time.Tick(time.Second) {
+	for range time.Tick(wsFailsCheck) {
 		if s.wsFails > maxWsFails {
 			log.Panicln("too many ws fails:", s.wsFails)
+		}
+		if s.wsFails > 0 {
+			s.wsFails--
 		}
 	}
 }
