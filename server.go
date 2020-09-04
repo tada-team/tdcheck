@@ -15,7 +15,7 @@ import (
 
 const (
 	retryInterval = time.Second
-	wsFailsCheck  = 30 * time.Second
+	wsFailsCheck  = time.Minute
 	maxTimeouts   = 10
 	maxWsFails    = 120
 )
