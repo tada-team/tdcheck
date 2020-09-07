@@ -79,14 +79,17 @@ func (s Server) Watch(rtr *mux.Router) {
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s request", s)
+
 		if s.apiPingEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Milliseconds()))
 		}
+
 		if s.wsPingEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", s.Host, s.wsPingDuration.Milliseconds()))
 		}
+
 		if s.checkMessageEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", s.Host, s.echoMessageDuration.Milliseconds()))
@@ -173,7 +176,7 @@ func (s *Server) doCheckMessage() error {
 			log.Printf("%s check: alice send %s: %s", s, messageId, text)
 
 			for time.Since(start) < interval {
-				msg, delayed, err := aliceWs.WaitForMessage(interval)
+				msg, delayed, err := aliceWs.WaitForMessage()
 				s.echoMessageDuration = time.Since(start)
 				if err == tdclient.WsTimeout {
 					log.Printf("%s check: alice got timeout on %s", s, messageId)
@@ -199,7 +202,7 @@ func (s *Server) doCheckMessage() error {
 			}
 
 			for time.Since(start) < interval {
-				msg, delayed, err := bobWs.WaitForMessage(interval)
+				msg, delayed, err := bobWs.WaitForMessage()
 				s.checkMessageDuration = time.Since(start)
 				if err == tdclient.WsTimeout {
 					log.Printf("%s check: bob got timeout on %s", s, messageId)
@@ -261,7 +264,7 @@ func (s *Server) doWsPing() error {
 			uid := aliceWs.Ping()
 			log.Printf("%s ws ping: alice send ping %s", s, uid)
 			for time.Since(start) < interval {
-				confirmId, err := aliceWs.WaitForConfirm(interval)
+				confirmId, err := aliceWs.WaitForConfirm()
 				s.wsPingDuration = time.Since(start)
 				if err == tdclient.WsTimeout {
 					log.Printf("%s ws ping: alice got ping timeout on %s", s, uid)
