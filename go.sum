@@ -16,6 +16,8 @@ github.com/tada-team/tdclient v0.1.1 h1:8CPwXP7dH1ggWOwKHXp3bcnl/OY1Phsz7pkisFE3
 github.com/tada-team/tdclient v0.1.1/go.mod h1:i5RjZD6p+Nsk9/xgApEfe7E0pA6E9mX1efIYsCI008w=
 github.com/tada-team/tdclient v0.1.2 h1:HxkfBeQJKYKes8u/J/eYGMYsopFXogew4rVt4GZesKM=
 github.com/tada-team/tdclient v0.1.2/go.mod h1:i5RjZD6p+Nsk9/xgApEfe7E0pA6E9mX1efIYsCI008w=
+github.com/tada-team/tdclient v0.1.5 h1:1UTJl+vDElgPMaWDXWMQGbYdjZXOkYY6Z3vzTE9UTGg=
+github.com/tada-team/tdclient v0.1.5/go.mod h1:i5RjZD6p+Nsk9/xgApEfe7E0pA6E9mX1efIYsCI008w=
 github.com/tada-team/tdproto v0.0.3 h1:BCkh0cDz7EU778FmfpzEWn7Ifvl+KyYW+yttK339Kpc=
 github.com/tada-team/tdproto v0.0.3/go.mod h1:VY1rTZXOhMxyZ1VE/Q82PB27AaFAooEQJFkO0HMlN8M=
 github.com/tada-team/tdproto v0.0.8 h1:/wnGitmzgxAk/S4UssUIAkILzrxFgPQUn2K8qfv/t14=

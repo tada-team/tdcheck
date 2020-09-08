@@ -149,7 +149,7 @@ func (s *Server) doCheckMessage() error {
 	}
 	log.Printf("%s check: alice jid: %s", s, alice.Jid)
 
-	aliceWs, err := aliceClient.WsClient(s.TestTeam, func(err error) { errChan <- err })
+	aliceWs, err := aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (s *Server) doCheckMessage() error {
 	}
 	log.Printf("%s check: bob jid: %s", s, bob.Jid)
 
-	bobWs, err := bobClient.WsClient(s.TestTeam, func(err error) { errChan <- err })
+	bobWs, err := bobClient.Ws(s.TestTeam, func(err error) { errChan <- err })
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (s *Server) doCheckMessage() error {
 			for time.Since(start) < interval {
 				msg, delayed, err := aliceWs.WaitForMessage()
 				s.echoMessageDuration = time.Since(start)
-				if err == tdclient.WsTimeout {
+				if err == tdclient.Timeout {
 					log.Printf("%s check: alice got timeout on %s", s, messageId)
 					numTimouts++
 					if numTimouts > maxTimeouts {
@@ -204,7 +204,7 @@ func (s *Server) doCheckMessage() error {
 			for time.Since(start) < interval {
 				msg, delayed, err := bobWs.WaitForMessage()
 				s.checkMessageDuration = time.Since(start)
-				if err == tdclient.WsTimeout {
+				if err == tdclient.Timeout {
 					log.Printf("%s check: bob got timeout on %s", s, messageId)
 					numTimouts++
 					if numTimouts > maxTimeouts {
@@ -252,7 +252,7 @@ func (s *Server) doWsPing() error {
 
 	interval := s.WsPingInterval
 	aliceClient := s.tdClient(s.AliceToken, interval)
-	aliceWs, err := aliceClient.WsClient(s.TestTeam, func(err error) { errChan <- err })
+	aliceWs, err := aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func (s *Server) doWsPing() error {
 			for time.Since(start) < interval {
 				confirmId, err := aliceWs.WaitForConfirm()
 				s.wsPingDuration = time.Since(start)
-				if err == tdclient.WsTimeout {
+				if err == tdclient.Timeout {
 					log.Printf("%s ws ping: alice got ping timeout on %s", s, uid)
 					numTimouts++
 					if numTimouts > maxTimeouts {
