@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -43,12 +44,16 @@ type Server struct {
 }
 
 func (s Server) tdClient(token string, timeout time.Duration) tdclient.Session {
-	sess, err := tdclient.NewSession("https://"+s.Host, s.Verbose)
+	if !strings.HasPrefix(s.Host, "http") {
+		s.Host = "https://" + s.Host
+	}
+	sess, err := tdclient.NewSession(s.Host)
 	if err != nil {
 		log.Panicln(err)
 	}
 	sess.Timeout = timeout
 	sess.SetToken(token)
+	sess.SetVerbose(s.Verbose)
 	return sess
 }
 
