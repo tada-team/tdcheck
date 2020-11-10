@@ -163,7 +163,7 @@ func (s *Server) userverPing() {
 		content, err := s.checkContent(s.UserverPingPath)
 		s.userverPingDuration = time.Since(start)
 
-		if err != nil {
+		if err != nil || len(content) == 0 {
 			log.Printf("%s userver ping: %s fail: %s", s, s.userverPingDuration.Truncate(time.Millisecond), err)
 			s.userverPingDuration = interval
 			continue
