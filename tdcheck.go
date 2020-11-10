@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v2"
@@ -23,9 +22,8 @@ func main() {
 	}
 
 	var config struct {
-		Listen          string        `yaml:"listen"`
-		ApiPingInterval time.Duration `yaml:"api_ping_interval"`
-		Servers         []Server      `yaml:"servers"`
+		Listen  string   `yaml:"listen"`
+		Servers []Server `yaml:"servers"`
 	}
 
 	if err := yaml.Unmarshal(b, &config); err != nil {

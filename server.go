@@ -90,7 +90,13 @@ func (s Server) Watch(rtr *mux.Router) {
 	go s.paniker()
 
 	path := "/" + s.Host
-	log.Println("listen path:", path)
+	log.Println(
+		"listen path:", path,
+		"api ping:", s.apiPingEnabled(),
+		"ws ping:", s.wsPingEnabled(),
+		"userver:", s.userverPingEnabled(),
+		"message:", s.checkMessageEnabled(),
+	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s request", s)
