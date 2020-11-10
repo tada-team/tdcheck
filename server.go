@@ -163,17 +163,19 @@ func (s *Server) userverPing() {
 		content, err := s.checkContent(s.UserverPingPath)
 		s.userverPingDuration = time.Since(start)
 
-		if s.Verbose {
-			log.Printf("%s userver ping: content of %s (%d byte(s))", s, s.UserverPingPath, len(content))
-		}
-
 		if err != nil {
 			log.Printf("%s userver ping: %s fail: %s", s, s.userverPingDuration.Truncate(time.Millisecond), err)
 			s.userverPingDuration = interval
 			continue
 		}
 
-		log.Printf("%s userver ping: %s %s OK", s, s.UserverPingPath, s.userverPingDuration.Truncate(time.Millisecond))
+		log.Printf(
+			"%s userver ping: %s %s OK: %d",
+			s,
+			s.UserverPingPath,
+			s.userverPingDuration.Truncate(time.Millisecond),
+			len(content),
+		)
 	}
 }
 
