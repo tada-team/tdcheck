@@ -143,12 +143,12 @@ func (s *Server) apiPing() {
 		s.apiPingDuration = time.Since(start)
 
 		if err != nil {
-			log.Printf("%s ping: %s fail: %s", s, s.apiPingDuration.Truncate(time.Millisecond), err)
+			log.Printf("%s api ping: %s fail: %s", s, s.apiPingDuration.Truncate(time.Millisecond), err)
 			s.apiPingDuration = interval
 			continue
 		}
 
-		log.Printf("%s ping: %s OK", s, s.apiPingDuration.Truncate(time.Millisecond))
+		log.Printf("%s api ping: %s OK", s, s.apiPingDuration.Truncate(time.Millisecond))
 	}
 }
 
@@ -164,7 +164,7 @@ func (s *Server) userverPing() {
 		s.userverPingDuration = time.Since(start)
 
 		if s.Verbose {
-			log.Printf("%s userver content of %s (%d byte(s))", s, s.UserverPingPath, len(content))
+			log.Printf("%s userver ping: content of %s (%d byte(s))", s, s.UserverPingPath, len(content))
 		}
 
 		if err != nil {
@@ -173,7 +173,7 @@ func (s *Server) userverPing() {
 			continue
 		}
 
-		log.Printf("%s ping: %s OK", s, s.userverPingDuration.Truncate(time.Millisecond))
+		log.Printf("%s userver ping: %s OK", s, s.userverPingDuration.Truncate(time.Millisecond))
 	}
 }
 
@@ -212,7 +212,7 @@ func (s *Server) checkMessage() {
 		for {
 			if err := s.doCheckMessage(); err != nil {
 				s.wsFails++
-				log.Printf("%s check: fatal #%d, %s", s, s.wsFails, err)
+				log.Printf("%s check message: fatal #%d, %s", s, s.wsFails, err)
 				time.Sleep(retryInterval)
 			}
 		}
@@ -228,7 +228,7 @@ func (s *Server) doCheckMessage() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("%s check: alice jid: %s", s, alice.Jid)
+	log.Printf("%s check message: alice jid: %s", s, alice.Jid)
 
 	aliceWs, err := aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
 	if err != nil {
@@ -240,7 +240,7 @@ func (s *Server) doCheckMessage() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("%s check: bob jid: %s", s, bob.Jid)
+	log.Printf("%s check message: bob jid: %s", s, bob.Jid)
 
 	bobWs, err := bobClient.Ws(s.TestTeam, func(err error) { errChan <- err })
 	if err != nil {
@@ -254,13 +254,13 @@ func (s *Server) doCheckMessage() error {
 
 			text := kozma.Say()
 			messageId := aliceWs.SendPlainMessage(bob.Jid, text)
-			log.Printf("%s check: alice send %s: %s", s, messageId, text)
+			log.Printf("%s check message: alice send %s: %s", s, messageId, text)
 
 			for time.Since(start) < interval {
 				msg, delayed, err := aliceWs.WaitForMessage()
 				s.echoMessageDuration = time.Since(start)
 				if err == tdclient.Timeout {
-					log.Printf("%s check: alice got timeout on %s", s, messageId)
+					log.Printf("%s check message: alice got timeout on %s", s, messageId)
 					numTimouts++
 					if numTimouts > maxTimeouts {
 						errChan <- err
@@ -275,9 +275,9 @@ func (s *Server) doCheckMessage() error {
 				if !delayed {
 					continue
 				}
-				log.Printf("%s check: alice got %s", s, msg.MessageId)
+				log.Printf("%s check message: alice got %s", s, msg.MessageId)
 				if msg.MessageId == messageId {
-					log.Printf("%s check: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
+					log.Printf("%s check message: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
 					break
 				}
 			}
@@ -286,7 +286,7 @@ func (s *Server) doCheckMessage() error {
 				msg, delayed, err := bobWs.WaitForMessage()
 				s.checkMessageDuration = time.Since(start)
 				if err == tdclient.Timeout {
-					log.Printf("%s check: bob got timeout on %s", s, messageId)
+					log.Printf("%s check message: bob got timeout on %s", s, messageId)
 					numTimouts++
 					if numTimouts > maxTimeouts {
 						errChan <- maxTimeoutsReached
@@ -301,14 +301,14 @@ func (s *Server) doCheckMessage() error {
 				if delayed {
 					continue
 				}
-				log.Printf("%s check: bob got %s: %s", s, msg.MessageId, msg.PushText)
+				log.Printf("%s check message: bob got %s: %s", s, msg.MessageId, msg.PushText)
 				if msg.MessageId == messageId {
-					log.Printf("%s check: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
+					log.Printf("%s check message: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
 					break
 				}
 			}
 
-			log.Printf("%s check: alice drop %s", s, messageId)
+			log.Printf("%s check message: alice drop %s", s, messageId)
 			aliceWs.DeleteMessage(messageId)
 		}
 	}()
