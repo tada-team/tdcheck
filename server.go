@@ -173,7 +173,7 @@ func (s *Server) userverPing() {
 			continue
 		}
 
-		log.Printf("%s userver ping: %s OK", s, s.UserverPingPath, s.userverPingDuration.Truncate(time.Millisecond))
+		log.Printf("%s userver ping: %s %s OK", s, s.UserverPingPath, s.userverPingDuration.Truncate(time.Millisecond))
 	}
 }
 
