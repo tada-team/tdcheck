@@ -90,7 +90,7 @@ func (s Server) Watch(rtr *mux.Router) {
 	go s.paniker()
 
 	path := "/" + s.Host
-	log.Println("watch:", path)
+	log.Println("listen path:", path)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s request", s)
@@ -154,8 +154,12 @@ func (s *Server) userverPing() {
 	interval := s.UserverPingInterval
 	for range time.Tick(interval) {
 		start := time.Now()
-		_, err := s.checkContent(s.UserverPingPath)
+		content, err := s.checkContent(s.UserverPingPath)
 		s.userverPingDuration = time.Since(start)
+
+		if s.Verbose {
+			log.Printf("%s userver content of %s (%d byte(s))", s, s.UserverPingPath, len(content))
+		}
 
 		if err != nil {
 			log.Printf("%s userver ping: %s fail: %s", s, s.userverPingDuration.Truncate(time.Millisecond), err)
