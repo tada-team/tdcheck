@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -37,6 +38,10 @@ type Server struct {
 	WsPingInterval time.Duration `yaml:"ws_ping_interval"`
 	wsPingDuration time.Duration
 
+	UserverPingInterval time.Duration `yaml:"userver_ping_interval"`
+	UserverPingPath     string        `yaml:"userver_ping_path"`
+	userverPingDuration time.Duration
+
 	CheckMessageInterval time.Duration `yaml:"check_message_interval"`
 	echoMessageDuration  time.Duration
 	checkMessageDuration time.Duration
@@ -61,6 +66,10 @@ func (s Server) apiPingEnabled() bool {
 	return s.ApiPingInterval > 0
 }
 
+func (s Server) userverPingEnabled() bool {
+	return s.UserverPingInterval > 0 && s.UserverPingPath != ""
+}
+
 func (s Server) wsPingEnabled() bool {
 	return s.WsPingInterval > 0 && s.TestTeam != "" && s.AliceToken != ""
 }
@@ -74,7 +83,8 @@ func (s Server) String() string {
 }
 
 func (s Server) Watch(rtr *mux.Router) {
-	go s.ping()
+	go s.apiPing()
+	go s.userverPing()
 	go s.wsPing()
 	go s.checkMessage()
 	go s.paniker()
@@ -88,6 +98,11 @@ func (s Server) Watch(rtr *mux.Router) {
 		if s.apiPingEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Milliseconds()))
+		}
+
+		if s.userverPingEnabled() {
+			io.WriteString(w, "# TYPE tdcheck_userver_ping_ms gauge\n")
+			io.WriteString(w, fmt.Sprintf("tdcheck_userver_ping_ms{host=\"%s\"} %d\n", s.Host, s.userverPingDuration.Milliseconds()))
 		}
 
 		if s.wsPingEnabled() {
@@ -108,7 +123,7 @@ func (s Server) Watch(rtr *mux.Router) {
 	})
 }
 
-func (s *Server) ping() {
+func (s *Server) apiPing() {
 	if !s.apiPingEnabled() {
 		return
 	}
@@ -129,6 +144,57 @@ func (s *Server) ping() {
 
 		log.Printf("%s ping: %s OK", s, s.apiPingDuration.Truncate(time.Millisecond))
 	}
+}
+
+func (s *Server) userverPing() {
+	if !s.userverPingEnabled() {
+		return
+	}
+
+	interval := s.UserverPingInterval
+	for range time.Tick(interval) {
+		start := time.Now()
+		_, err := s.checkContent(s.UserverPingPath)
+		s.userverPingDuration = time.Since(start)
+
+		if err != nil {
+			log.Printf("%s userver ping: %s fail: %s", s, s.userverPingDuration.Truncate(time.Millisecond), err)
+			s.userverPingDuration = interval
+			continue
+		}
+
+		log.Printf("%s ping: %s OK", s, s.userverPingDuration.Truncate(time.Millisecond))
+	}
+}
+
+func (s *Server) checkContent(path string) ([]byte, error) {
+	if strings.HasPrefix(s.Host, "http") {
+		path = s.Host + path
+	} else {
+		path = "https://" + s.Host + path
+	}
+
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "new request fail")
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "client do fail")
+	}
+	defer resp.Body.Close()
+
+	respData, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "read body fail")
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, errors.Wrapf(err, "status code: %d %s", resp.StatusCode, string(respData))
+	}
+
+	return respData, nil
 }
 
 func (s *Server) checkMessage() {
