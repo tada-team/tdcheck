@@ -234,6 +234,8 @@ func (s *Server) checkMessage() {
 		for {
 			if err := s.doCheckMessage(); err != nil {
 				s.wsFails++
+				s.echoMessageDuration = s.CheckMessageInterval
+				s.checkMessageDuration = s.CheckMessageInterval
 				log.Printf("%s check message: fatal #%d, %s", s, s.wsFails, err)
 				time.Sleep(retryInterval)
 			}
