@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tada-team/kozma"
 	"github.com/tada-team/tdclient"
+	"github.com/tada-team/tdproto"
 )
 
 const (
@@ -48,18 +49,18 @@ type Server struct {
 	wsFails              int
 }
 
-func (s Server) tdClient(token string, timeout time.Duration) tdclient.Session {
+func (s Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
 	if !strings.HasPrefix(s.Host, "http") {
 		s.Host = "https://" + s.Host
 	}
 	sess, err := tdclient.NewSession(s.Host)
 	if err != nil {
-		log.Panicln(err)
+		return nil, err
 	}
 	sess.Timeout = timeout
 	sess.SetToken(token)
 	sess.SetVerbose(s.Verbose)
-	return sess
+	return &sess, nil
 }
 
 func (s Server) apiPingEnabled() bool {
@@ -92,9 +93,13 @@ func (s Server) Watch(rtr *mux.Router) {
 	path := "/" + s.Host
 	log.Println(
 		"listen path:", path,
+		"|",
 		"api ping:", s.apiPingEnabled(),
+		"|",
 		"ws ping:", s.wsPingEnabled(),
+		"|",
 		"userver:", s.userverPingEnabled(),
+		"|",
 		"message:", s.checkMessageEnabled(),
 	)
 
@@ -134,12 +139,22 @@ func (s *Server) apiPing() {
 		return
 	}
 
-	interval := s.ApiPingInterval
-	client := s.tdClient(s.BobToken, interval)
+	var err error
+	var client *tdclient.Session
 
+	interval := s.ApiPingInterval
 	for range time.Tick(interval) {
-		start := time.Now()
+		if client == nil {
+			client, err = s.tdClient(s.BobToken, interval)
+			if err != nil {
+				log.Printf("%s api ping: connect error: %s", s, err)
+				s.apiPingDuration = interval
+				continue
+			}
+		}
+
 		err := client.Ping()
+		start := time.Now()
 		s.apiPingDuration = time.Since(start)
 
 		if err != nil {
@@ -228,35 +243,74 @@ func (s *Server) checkMessage() {
 
 func (s *Server) doCheckMessage() error {
 	errChan := make(chan error)
-
-	interval := s.CheckMessageInterval
-	aliceClient := s.tdClient(s.AliceToken, interval)
-	alice, err := aliceClient.Me(s.TestTeam)
-	if err != nil {
-		return err
-	}
-	log.Printf("%s check message: alice jid: %s", s, alice.Jid)
-
-	aliceWs, err := aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
-	if err != nil {
-		return err
-	}
-
-	bobClient := s.tdClient(s.BobToken, interval)
-	bob, err := bobClient.Me(s.TestTeam)
-	if err != nil {
-		return err
-	}
-	log.Printf("%s check message: bob jid: %s", s, bob.Jid)
-
-	bobWs, err := bobClient.Ws(s.TestTeam, func(err error) { errChan <- err })
-	if err != nil {
-		return err
-	}
-
-	numTimouts := 0
 	go func() {
+		var err error
+		var aliceClient, bobClient *tdclient.Session
+		var aliceWs, bobWs *tdclient.WsSession
+		var alice, bob tdproto.Contact
+
+		numTimouts := 0
+		interval := s.CheckMessageInterval
+
 		for range time.Tick(interval) {
+			if aliceClient == nil {
+				aliceClient, err = s.tdClient(s.AliceToken, interval)
+				if err != nil {
+					log.Printf("%s check message: alice connect fail %s", s, err)
+					s.echoMessageDuration = interval
+					s.checkMessageDuration = interval
+					continue
+				}
+			}
+
+			if alice.Jid.Empty() {
+				alice, err = aliceClient.Me(s.TestTeam)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				log.Printf("%s check message: alice jid: %s", s, alice.Jid)
+			}
+
+			if aliceWs == nil {
+				aliceWs, err = aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
+				if err != nil {
+					log.Printf("%s check message: alice ws connect fail %s", s, err)
+					s.echoMessageDuration = interval
+					s.checkMessageDuration = interval
+					continue
+				}
+			}
+
+			if bobClient == nil {
+				bobClient, err = s.tdClient(s.BobToken, interval)
+				if err != nil {
+					log.Printf("%s check message: bob connect fail %s", s, err)
+					s.echoMessageDuration = interval
+					s.checkMessageDuration = interval
+					continue
+				}
+			}
+
+			if bob.Jid.Empty() {
+				bob, err = bobClient.Me(s.TestTeam)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				log.Printf("%s check message: bob jid: %s", s, bob.Jid)
+			}
+
+			if bobWs == nil {
+				bobWs, err = bobClient.Ws(s.TestTeam, func(err error) { errChan <- err })
+				if err != nil {
+					log.Printf("%s check message: bob ws connect fail %s", s, err)
+					s.echoMessageDuration = interval
+					s.checkMessageDuration = interval
+					continue
+				}
+			}
+
 			start := time.Now()
 
 			text := kozma.Say()
@@ -338,16 +392,32 @@ func (s *Server) wsPing() {
 func (s *Server) doWsPing() error {
 	errChan := make(chan error)
 
-	interval := s.WsPingInterval
-	aliceClient := s.tdClient(s.AliceToken, interval)
-	aliceWs, err := aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
-	if err != nil {
-		return err
-	}
-
 	numTimouts := 0
 	go func() {
+		var err error
+		var aliceClient *tdclient.Session
+		var aliceWs *tdclient.WsSession
+
+		interval := s.WsPingInterval
 		for range time.Tick(interval) {
+			if aliceClient == nil {
+				aliceClient, err = s.tdClient(s.AliceToken, interval)
+				if err != nil {
+					log.Printf("%s ws ping: connect fail %s", s, err)
+					s.wsPingDuration = interval
+					continue
+				}
+			}
+
+			if aliceWs == nil {
+				aliceWs, err = aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
+				if err != nil {
+					log.Printf("%s ws ping: ws connect fail %s", s, err)
+					s.wsPingDuration = interval
+					continue
+				}
+			}
+
 			start := time.Now()
 			uid := aliceWs.Ping()
 			log.Printf("%s ws ping: alice send ping %s", s, uid)
