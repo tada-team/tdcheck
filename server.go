@@ -153,8 +153,9 @@ func (s *Server) apiPing() {
 			}
 		}
 
-		err := client.Ping()
 		start := time.Now()
+
+		err := client.Ping()
 		s.apiPingDuration = time.Since(start)
 
 		if err != nil {
