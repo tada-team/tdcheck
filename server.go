@@ -257,11 +257,15 @@ func (s *Server) doCheckMessage() error {
 		for range time.Tick(interval) {
 			if aliceClient == nil {
 				aliceClient, err = s.tdClient(s.AliceToken, interval)
+				//if err != nil {
+				//	log.Printf("%s check message: alice connect fail %s", s, err)
+				//	s.echoMessageDuration = interval
+				//	s.checkMessageDuration = interval
+				//	continue
+				//}
 				if err != nil {
-					log.Printf("%s check message: alice connect fail %s", s, err)
-					s.echoMessageDuration = interval
-					s.checkMessageDuration = interval
-					continue
+					errChan <- err
+					return
 				}
 			}
 
@@ -276,21 +280,29 @@ func (s *Server) doCheckMessage() error {
 
 			if aliceWs == nil {
 				aliceWs, err = aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
+				//if err != nil {
+				//	log.Printf("%s check message: alice ws connect fail %s", s, err)
+				//	s.echoMessageDuration = interval
+				//	s.checkMessageDuration = interval
+				//	continue
+				//}
 				if err != nil {
-					log.Printf("%s check message: alice ws connect fail %s", s, err)
-					s.echoMessageDuration = interval
-					s.checkMessageDuration = interval
-					continue
+					errChan <- err
+					return
 				}
 			}
 
 			if bobClient == nil {
 				bobClient, err = s.tdClient(s.BobToken, interval)
+				//if err != nil {
+				//	log.Printf("%s check message: bob connect fail %s", s, err)
+				//	s.echoMessageDuration = interval
+				//	s.checkMessageDuration = interval
+				//	continue
+				//}
 				if err != nil {
-					log.Printf("%s check message: bob connect fail %s", s, err)
-					s.echoMessageDuration = interval
-					s.checkMessageDuration = interval
-					continue
+					errChan <- err
+					return
 				}
 			}
 
@@ -305,11 +317,15 @@ func (s *Server) doCheckMessage() error {
 
 			if bobWs == nil {
 				bobWs, err = bobClient.Ws(s.TestTeam, func(err error) { errChan <- err })
+				//if err != nil {
+				//	log.Printf("%s check message: bob ws connect fail %s", s, err)
+				//	s.echoMessageDuration = interval
+				//	s.checkMessageDuration = interval
+				//	continue
+				//}
 				if err != nil {
-					log.Printf("%s check message: bob ws connect fail %s", s, err)
-					s.echoMessageDuration = interval
-					s.checkMessageDuration = interval
-					continue
+					errChan <- err
+					return
 				}
 			}
 
@@ -385,6 +401,7 @@ func (s *Server) wsPing() {
 		for {
 			if err := s.doWsPing(); err != nil {
 				s.wsFails++
+				s.wsPingDuration = s.WsPingInterval
 				log.Printf("%s ws ping: fatal #%d, %s", s, s.wsFails, err)
 				time.Sleep(retryInterval)
 			}
@@ -405,19 +422,27 @@ func (s *Server) doWsPing() error {
 		for range time.Tick(interval) {
 			if aliceClient == nil {
 				aliceClient, err = s.tdClient(s.AliceToken, interval)
+				//if err != nil {
+				//	log.Printf("%s ws ping: connect fail %s", s, err)
+				//	s.wsPingDuration = interval
+				//	continue
+				//}
 				if err != nil {
-					log.Printf("%s ws ping: connect fail %s", s, err)
-					s.wsPingDuration = interval
-					continue
+					errChan <- err
+					return
 				}
 			}
 
 			if aliceWs == nil {
 				aliceWs, err = aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
+				//if err != nil {
+				//	log.Printf("%s ws ping: ws connect fail %s", s, err)
+				//	s.wsPingDuration = interval
+				//	continue
+				//}
 				if err != nil {
-					log.Printf("%s ws ping: ws connect fail %s", s, err)
-					s.wsPingDuration = interval
-					continue
+					errChan <- err
+					return
 				}
 			}
 
