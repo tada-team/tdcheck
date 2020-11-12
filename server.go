@@ -320,6 +320,7 @@ func (s *Server) doCheckMessage() error {
 			for time.Since(start) < interval {
 				msg, delayed, err := aliceWs.WaitForMessage()
 				s.echoMessageDuration = time.Since(start)
+				s.checkMessageDuration = interval
 				if err == tdclient.Timeout {
 					log.Printf("%s check message: alice got timeout on %s", s, messageId)
 					numTimouts++
