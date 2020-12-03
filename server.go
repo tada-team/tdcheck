@@ -23,7 +23,7 @@ const (
 	maxWsFails    = 120
 )
 
-var maxTimeoutsReached = errors.New("max timouts")
+var maxTimeoutsReached = errors.New("max timeouts")
 
 type Server struct {
 	Host string `yaml:"host"`
@@ -47,6 +47,7 @@ type Server struct {
 	CheckCallInterval    time.Duration `yaml:"check_call_interval"`
 	echoMessageDuration  time.Duration
 	checkMessageDuration time.Duration
+	checkCallDuration    time.Duration
 	wsFails              int
 	callsFails           int
 }
@@ -142,8 +143,10 @@ func (s Server) Watch(rtr *mux.Router) {
 		}
 
 		if s.checkCallEnabled() {
+			io.WriteString(w, "# TYPE tdcheck_calls_fails counter\n")
+			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.callsFails))
 			io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.CheckCallInterval.Milliseconds()))
+			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.checkCallDuration.Milliseconds()))
 		}
 	})
 }
@@ -393,9 +396,9 @@ func (s *Server) doCheckMessage() error {
 func (s *Server) checkCall() {
 	if s.checkCallEnabled() {
 		for {
-
 			if err := s.doCheckCall(); err != nil {
 				s.callsFails++
+				s.checkCallDuration = s.CheckCallInterval
 				log.Printf("%s check calls: fatal #%d, %s", s, s.wsFails, err)
 				time.Sleep(retryInterval)
 			}
@@ -441,8 +444,9 @@ func (s *Server) doCheckCall() error {
 			errChan <- err
 			return
 		}
-
+		start := time.Now()
 		for range time.Tick(interval) {
+			s.checkCallDuration = 0
 			if err := s.updateClient(alice, errChan); err != nil {
 				errChan <- err
 				return
@@ -459,6 +463,7 @@ func (s *Server) doCheckCall() error {
 			}
 
 			tdclient.SendCallLeave(alice.wsSession, alice.Name, bob.contact.Jid.JID())
+			s.checkCallDuration = time.Since(start)
 		}
 	}()
 

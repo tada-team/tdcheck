@@ -12,6 +12,7 @@ servers:
   - host: myserver.tada.team
     api_ping_interval: 30s
     ws_ping_interval: 10s
+    check_call_interval: 120s
     check_message_interval: 30s
     test_team: xxxx
     alice_token: xxxx
