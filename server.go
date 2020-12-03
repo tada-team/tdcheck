@@ -148,6 +148,44 @@ func (s Server) Watch(rtr *mux.Router) {
 	})
 }
 
+type Client struct {
+	apiSession        *tdclient.Session
+	wsSession         *tdclient.WsSession
+	apiSessionTimeout time.Duration
+	contact           tdproto.Contact
+
+	token string
+	Name  string
+}
+
+func (s *Server) updateClient(client *Client, errChan chan error) error {
+	var err error
+	if client.apiSession == nil {
+		client.apiSession, err = s.tdClient(client.token, client.apiSessionTimeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	if client.contact.Jid.Empty() {
+		client.contact, err = client.apiSession.Me(s.TestTeam)
+		if err != nil {
+			return err
+		}
+		log.Printf("%s check me: %s jid: %s", s, client.Name, client.contact.Jid)
+	}
+
+	if client.wsSession == nil {
+		client.wsSession, err = client.apiSession.Ws(s.TestTeam, func(err error) {
+			errChan <- err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Server) apiPing() {
 	if !s.apiPingEnabled() {
 		return
@@ -261,97 +299,38 @@ func (s *Server) checkMessage() {
 func (s *Server) doCheckMessage() error {
 	errChan := make(chan error)
 	go func() {
-		var err error
-		var aliceClient, bobClient *tdclient.Session
-		var aliceWs, bobWs *tdclient.WsSession
-		var alice, bob tdproto.Contact
+		interval := s.CheckMessageInterval
+		alice := &Client{
+			Name:              "alice",
+			token:             s.AliceToken,
+			apiSessionTimeout: interval,
+		}
+
+		bob := &Client{
+			Name:              "bob",
+			token:             s.BobToken,
+			apiSessionTimeout: interval,
+		}
 
 		numTimouts := 0
-		interval := s.CheckMessageInterval
-
 		for range time.Tick(interval) {
-			if aliceClient == nil {
-				aliceClient, err = s.tdClient(s.AliceToken, interval)
-				//if err != nil {
-				//	log.Printf("%s check message: alice connect fail %s", s, err)
-				//	s.echoMessageDuration = interval
-				//	s.checkMessageDuration = interval
-				//	continue
-				//}
-				if err != nil {
-					errChan <- err
-					return
-				}
+			if err := s.updateClient(alice, errChan); err != nil {
+				errChan <- err
+				return
 			}
 
-			if alice.Jid.Empty() {
-				alice, err = aliceClient.Me(s.TestTeam)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				log.Printf("%s check message: alice jid: %s", s, alice.Jid)
-			}
-
-			if aliceWs == nil {
-				aliceWs, err = aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
-				//if err != nil {
-				//	log.Printf("%s check message: alice ws connect fail %s", s, err)
-				//	s.echoMessageDuration = interval
-				//	s.checkMessageDuration = interval
-				//	continue
-				//}
-				if err != nil {
-					errChan <- err
-					return
-				}
-			}
-
-			if bobClient == nil {
-				bobClient, err = s.tdClient(s.BobToken, interval)
-				//if err != nil {
-				//	log.Printf("%s check message: bob connect fail %s", s, err)
-				//	s.echoMessageDuration = interval
-				//	s.checkMessageDuration = interval
-				//	continue
-				//}
-				if err != nil {
-					errChan <- err
-					return
-				}
-			}
-
-			if bob.Jid.Empty() {
-				bob, err = bobClient.Me(s.TestTeam)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				log.Printf("%s check message: bob jid: %s", s, bob.Jid)
-			}
-
-			if bobWs == nil {
-				bobWs, err = bobClient.Ws(s.TestTeam, func(err error) { errChan <- err })
-				//if err != nil {
-				//	log.Printf("%s check message: bob ws connect fail %s", s, err)
-				//	s.echoMessageDuration = interval
-				//	s.checkMessageDuration = interval
-				//	continue
-				//}
-				if err != nil {
-					errChan <- err
-					return
-				}
+			if err := s.updateClient(bob, errChan); err != nil {
+				errChan <- err
+				return
 			}
 
 			start := time.Now()
-
 			text := kozma.Say()
-			messageId := aliceWs.SendPlainMessage(bob.Jid, text)
+			messageId := alice.wsSession.SendPlainMessage(bob.contact.Jid, text)
 			log.Printf("%s check message: alice send %s: %s", s, messageId, text)
 
 			for time.Since(start) < interval {
-				msg, delayed, err := aliceWs.WaitForMessage()
+				msg, delayed, err := alice.wsSession.WaitForMessage()
 				s.echoMessageDuration = time.Since(start)
 				s.checkMessageDuration = interval
 				if err == tdclient.Timeout {
@@ -378,7 +357,7 @@ func (s *Server) doCheckMessage() error {
 			}
 
 			for time.Since(start) < interval {
-				msg, delayed, err := bobWs.WaitForMessage()
+				msg, delayed, err := bob.wsSession.WaitForMessage()
 				s.checkMessageDuration = time.Since(start)
 				if err == tdclient.Timeout {
 					log.Printf("%s check message: bob got timeout on %s", s, messageId)
@@ -404,7 +383,7 @@ func (s *Server) doCheckMessage() error {
 			}
 
 			log.Printf("%s check message: alice drop %s", s, messageId)
-			aliceWs.DeleteMessage(messageId)
+			alice.wsSession.DeleteMessage(messageId)
 		}
 	}()
 
@@ -424,50 +403,12 @@ func (s *Server) checkCall() {
 	}
 }
 
-type Client struct {
-	apiSession        *tdclient.Session
-	wsSession         *tdclient.WsSession
-	apiSessionTimeout time.Duration
-	contact           tdproto.Contact
-
-	token string
-	Name  string
-}
-
-func (s *Server) updateClient(client *Client, errChan chan error) error {
-	var err error
-	if client.apiSession == nil {
-		client.apiSession, err = s.tdClient(client.token, client.apiSessionTimeout)
-		if err != nil {
-			return err
-		}
-	}
-
-	if client.contact.Jid.Empty() {
-		client.contact, err = client.apiSession.Me(s.TestTeam)
-		if err != nil {
-			return err
-		}
-		log.Printf("%s check me: %s jid: %s", s, client.Name, client.contact.Jid)
-	}
-
-	if client.wsSession == nil {
-		client.wsSession, err = client.apiSession.Ws(s.TestTeam, func(err error) {
-			errChan <- err
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Server) webRtcConnect(client *Client, jid *tdproto.JID, iceServer string, name string) error {
 	peerConnection, offer, _, err := tdclient.NewPeerConnection(name, iceServer)
 	if err != nil {
 		return err
 	}
-	answer, err := tdclient.SendCallOffer(client.wsSession, "Alice", jid, offer.SDP)
+	answer, err := tdclient.SendCallOffer(client.wsSession, client.Name, jid, offer.SDP)
 	if err != nil {
 		return err
 	}
@@ -512,7 +453,7 @@ func (s *Server) doCheckCall() error {
 				return
 			}
 
-			if err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, "Alice"); err != nil {
+			if err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, alice.Name); err != nil {
 				errChan <- err
 				return
 			}
