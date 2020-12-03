@@ -44,9 +44,11 @@ type Server struct {
 	userverPingDuration time.Duration
 
 	CheckMessageInterval time.Duration `yaml:"check_message_interval"`
+	CheckCallInterval    time.Duration `yaml:"check_call_interval"`
 	echoMessageDuration  time.Duration
 	checkMessageDuration time.Duration
 	wsFails              int
+	callsFails           int
 }
 
 func (s Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
@@ -79,6 +81,10 @@ func (s Server) checkMessageEnabled() bool {
 	return s.CheckMessageInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
 }
 
+func (s Server) checkCallEnabled() bool {
+	return s.CheckCallInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
+}
+
 func (s Server) String() string {
 	return fmt.Sprintf("[%s]", s.Host)
 }
@@ -88,6 +94,7 @@ func (s Server) Watch(rtr *mux.Router) {
 	go s.userverPing()
 	go s.wsPing()
 	go s.checkMessage()
+	go s.checkCall()
 	go s.paniker()
 
 	path := "/" + s.Host
@@ -101,6 +108,8 @@ func (s Server) Watch(rtr *mux.Router) {
 		"userver:", s.userverPingEnabled(),
 		"|",
 		"message:", s.checkMessageEnabled(),
+		"|",
+		"calls:", s.checkCallEnabled(),
 	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +139,11 @@ func (s Server) Watch(rtr *mux.Router) {
 
 			io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, s.wsFails))
+		}
+
+		if s.checkCallEnabled() {
+			io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
+			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.CheckCallInterval.Milliseconds()))
 		}
 	})
 }
@@ -391,6 +405,119 @@ func (s *Server) doCheckMessage() error {
 
 			log.Printf("%s check message: alice drop %s", s, messageId)
 			aliceWs.DeleteMessage(messageId)
+		}
+	}()
+
+	return <-errChan
+}
+
+func (s *Server) checkCall() {
+	if s.checkCallEnabled() {
+		for {
+
+			if err := s.doCheckCall(); err != nil {
+				s.callsFails++
+				log.Printf("%s check calls: fatal #%d, %s", s, s.wsFails, err)
+				time.Sleep(retryInterval)
+			}
+		}
+	}
+}
+
+type Client struct {
+	apiSession        *tdclient.Session
+	wsSession         *tdclient.WsSession
+	apiSessionTimeout time.Duration
+	contact           tdproto.Contact
+
+	token string
+	Name  string
+}
+
+func (s *Server) updateClient(client *Client, errChan chan error) error {
+	var err error
+	if client.apiSession == nil {
+		client.apiSession, err = s.tdClient(client.token, client.apiSessionTimeout)
+		if err != nil {
+			return err
+		}
+	}
+
+	if client.contact.Jid.Empty() {
+		client.contact, err = client.apiSession.Me(s.TestTeam)
+		if err != nil {
+			return err
+		}
+		log.Printf("%s check me: %s jid: %s", s, client.Name, client.contact.Jid)
+	}
+
+	if client.wsSession == nil {
+		client.wsSession, err = client.apiSession.Ws(s.TestTeam, func(err error) {
+			errChan <- err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Server) webRtcConnect(client *Client, jid *tdproto.JID, iceServer string, name string) error {
+	peerConnection, offer, _, err := tdclient.NewPeerConnection(name, iceServer)
+	if err != nil {
+		return err
+	}
+	answer, err := tdclient.SendCallOffer(client.wsSession, "Alice", jid, offer.SDP)
+	if err != nil {
+		return err
+	}
+
+	if err := peerConnection.SetRemoteDescription(answer); err != nil {
+		return fmt.Errorf("%v: SetRemoteDescription fail: %v", name, err)
+	}
+	return nil
+}
+
+func (s *Server) doCheckCall() error {
+	errChan := make(chan error)
+	go func() {
+		interval := s.CheckCallInterval
+		alice := &Client{
+			Name:              "alice",
+			token:             s.AliceToken,
+			apiSessionTimeout: interval,
+		}
+
+		bob := &Client{
+			Name:              "bob",
+			token:             s.BobToken,
+			apiSessionTimeout: interval,
+		}
+
+		url := "https://" + s.Host
+		iceServer, err := tdclient.GetIceServer(url)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		for range time.Tick(interval) {
+			if err := s.updateClient(alice, errChan); err != nil {
+				errChan <- err
+				return
+			}
+
+			if err := s.updateClient(bob, errChan); err != nil {
+				errChan <- err
+				return
+			}
+
+			if err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, "Alice"); err != nil {
+				errChan <- err
+				return
+			}
+
+			tdclient.SendCallLeave(alice.wsSession, alice.Name, bob.contact.Jid.JID())
 		}
 	}()
 
