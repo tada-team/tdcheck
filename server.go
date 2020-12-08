@@ -417,7 +417,7 @@ func (s *Server) webRtcConnect(client *Client, jid *tdproto.JID, iceServer strin
 	}
 
 	if err := peerConnection.SetRemoteDescription(answer); err != nil {
-		return fmt.Errorf("%v: SetRemoteDescription fail: %v", name, err)
+		return fmt.Errorf("%s %v: SetRemoteDescription fail: %v", s, name, err)
 	}
 	return nil
 }
@@ -427,13 +427,13 @@ func (s *Server) doCheckCall() error {
 	go func() {
 		interval := s.CheckCallInterval
 		alice := &Client{
-			Name:              "alice",
+			Name:              s.String() + "alice",
 			token:             s.AliceToken,
 			apiSessionTimeout: interval,
 		}
 
 		bob := &Client{
-			Name:              "bob",
+			Name:              s.String() + "bob",
 			token:             s.BobToken,
 			apiSessionTimeout: interval,
 		}
