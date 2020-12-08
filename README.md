@@ -21,16 +21,26 @@ servers:
 
 ...где `host` — адрес вашей инсталляции tada, `test_team` — uid тестовой команды, `alice_token` и `bob_token` — токены, полученные на первом шаге.
 
-3. Установить на сервер мониторинг, например, так: 
+
+3. Установить на сервер мониторинг через `git clone`, например, так:
+
+``NOTE: в некоторых случаях может потребоваться переменная окружения export GO111MODULE=on``
+
 ```bash
-sudo -H -u www-data go get -u github.com/tada-team/tdcheck
+cd /opt/
+sudo git clone https://github.com/tada-team/tdcheck.git
+cd tdcheck
+sudo go get
+sudo go build
+sudo chown www-data ./tdcheck
 ```
+ 
 
 4. Поставить мониторинг в автозапуск любым удобным способом, например через supervisor: 
 ```
 # /etc/supervisor/conf.d/tdcheck.conf
 [program:tdcheck]
-command=/var/www/go/bin/tdcheck
+command=/opt/tdcheck/tdcheck
 autorestart=true
 user=www-data
 ```
@@ -654,7 +664,7 @@ user=www-data
         }
       ],
       "thresholds": [],
-      "timeFrom": null,е
+      "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
       "title": "Доставка собеседнику",
