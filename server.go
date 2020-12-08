@@ -444,9 +444,8 @@ func (s *Server) doCheckCall() error {
 			errChan <- err
 			return
 		}
-		start := time.Now()
 		for range time.Tick(interval) {
-			s.checkCallDuration = 0
+			start := time.Now()
 			if err := s.updateClient(alice, errChan); err != nil {
 				errChan <- err
 				return
@@ -464,6 +463,7 @@ func (s *Server) doCheckCall() error {
 
 			tdclient.SendCallLeave(alice.wsSession, alice.Name, bob.contact.Jid.JID())
 			s.checkCallDuration = time.Since(start)
+			log.Printf("%s call test: %s OK", s, s.checkCallDuration.Truncate(time.Millisecond))
 		}
 	}()
 
