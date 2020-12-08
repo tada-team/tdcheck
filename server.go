@@ -144,7 +144,7 @@ func (s Server) Watch(rtr *mux.Router) {
 
 		if s.checkCallEnabled() {
 			io.WriteString(w, "# TYPE tdcheck_calls_fails counter\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.callsFails))
+			io.WriteString(w, fmt.Sprintf("tdcheck_calls_fails{host=\"%s\"} %d\n", s.Host, s.callsFails))
 			io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
 			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.checkCallDuration.Milliseconds()))
 		}
