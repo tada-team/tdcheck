@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/pion/webrtc/v2"
 	"github.com/pkg/errors"
 	"github.com/tada-team/kozma"
 	"github.com/tada-team/tdclient"
@@ -406,20 +407,20 @@ func (s *Server) checkCall() {
 	}
 }
 
-func (s *Server) webRtcConnect(client *Client, jid *tdproto.JID, iceServer string, name string) error {
+func (s *Server) webRtcConnect(client *Client, jid *tdproto.JID, iceServer string, name string) (peerConnection *webrtc.PeerConnection, error error) {
 	peerConnection, offer, _, err := tdclient.NewPeerConnection(name, iceServer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	answer, err := tdclient.SendCallOffer(client.wsSession, client.Name, jid, offer.SDP)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := peerConnection.SetRemoteDescription(answer); err != nil {
-		return fmt.Errorf("%s %v: SetRemoteDescription fail: %v", s, name, err)
+		return nil, fmt.Errorf("%s %v: SetRemoteDescription fail: %v", s, name, err)
 	}
-	return nil
+	return peerConnection, nil
 }
 
 func (s *Server) doCheckCall() error {
@@ -456,7 +457,8 @@ func (s *Server) doCheckCall() error {
 				return
 			}
 
-			if err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, alice.Name); err != nil {
+			peerConnection, err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, alice.Name)
+			if err != nil {
 				errChan <- err
 				return
 			}
@@ -464,6 +466,10 @@ func (s *Server) doCheckCall() error {
 			tdclient.SendCallLeave(alice.wsSession, alice.Name, bob.contact.Jid.JID())
 			s.checkCallDuration = time.Since(start)
 			log.Printf("%s call test: %s OK", s, s.checkCallDuration.Truncate(time.Millisecond))
+			if err := peerConnection.Close(); err != nil {
+				errChan <- err
+				return
+			}
 		}
 	}()
 
