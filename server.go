@@ -60,10 +60,11 @@ type Server struct {
 }
 
 func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
-	if !strings.HasPrefix(s.Host, "http") {
-		s.Host = "https://" + s.Host
+	url := s.Host
+	if !strings.HasPrefix(url, "http") {
+		url = "https://" + url
 	}
-	sess, err := tdclient.NewSession(s.Host)
+	sess, err := tdclient.NewSession(url)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +107,7 @@ func (s *Server) Watch(rtr *mux.Router) {
 	go s.checkCall()
 	go s.panickier()
 
-	path := "/" + strings.TrimPrefix("https://", s.Host)
+	path := "/" + s.Host
 	log.Println(
 		"listen path:", path,
 		"|",
@@ -316,7 +317,7 @@ func (s *Server) checkMessage() {
 func (s *Server) checkOnliners() {
 	if s.AliceToken != "" || s.MaxServerOnlineInterval == 0{
 		alice := &Client{
-			Name:  s.String() + "alice",
+			Name:  s.String() + " alice",
 			token: s.AliceToken,
 		}
 		for {
@@ -496,13 +497,13 @@ func (s *Server) doCheckCall() error {
 	go func() {
 		interval := s.CheckCallInterval
 		alice := &Client{
-			Name:              s.String() + "alice",
+			Name:              s.String() + " alice",
 			token:             s.AliceToken,
 			apiSessionTimeout: interval,
 		}
 
 		bob := &Client{
-			Name:              s.String() + "bob",
+			Name:              s.String() + " bob",
 			token:             s.BobToken,
 			apiSessionTimeout: interval,
 		}
