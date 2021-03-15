@@ -16,3 +16,5 @@ vendor/
 
 test.yml
 local.yml
+
+tdclient

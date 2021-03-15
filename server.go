@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,6 +45,10 @@ type Server struct {
 	UserverPingPath     string        `yaml:"userver_ping_path"`
 	userverPingDuration time.Duration
 
+	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
+	onliners                int
+	calls                   int
+
 	CheckMessageInterval time.Duration `yaml:"check_message_interval"`
 	CheckCallInterval    time.Duration `yaml:"check_call_interval"`
 	echoMessageDuration  time.Duration
@@ -51,10 +56,9 @@ type Server struct {
 	checkCallDuration    time.Duration
 	wsFails              int
 	callsFails           int
-	onliners             int
 }
 
-func (s Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
+func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
 	if !strings.HasPrefix(s.Host, "http") {
 		s.Host = "https://" + s.Host
 	}
@@ -68,37 +72,38 @@ func (s Server) tdClient(token string, timeout time.Duration) (*tdclient.Session
 	return &sess, nil
 }
 
-func (s Server) apiPingEnabled() bool {
+func (s *Server) apiPingEnabled() bool {
 	return s.ApiPingInterval > 0
 }
 
-func (s Server) userverPingEnabled() bool {
+func (s *Server) userverPingEnabled() bool {
 	return s.UserverPingInterval > 0 && s.UserverPingPath != ""
 }
 
-func (s Server) wsPingEnabled() bool {
+func (s *Server) wsPingEnabled() bool {
 	return s.WsPingInterval > 0 && s.TestTeam != "" && s.AliceToken != ""
 }
 
-func (s Server) checkMessageEnabled() bool {
+func (s *Server) checkMessageEnabled() bool {
 	return s.CheckMessageInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
 }
 
-func (s Server) checkCallEnabled() bool {
+func (s *Server) checkCallEnabled() bool {
 	return s.CheckCallInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
 }
 
-func (s Server) String() string {
+func (s *Server) String() string {
 	return fmt.Sprintf("[%s]", s.Host)
 }
 
-func (s Server) Watch(rtr *mux.Router) {
+func (s *Server) Watch(rtr *mux.Router) {
 	go s.apiPing()
 	go s.userverPing()
 	go s.wsPing()
 	go s.checkMessage()
+	go s.checkOnliners()
 	go s.checkCall()
-	go s.paniker()
+	go s.panickier()
 
 	path := "/" + s.Host
 	log.Println(
@@ -135,6 +140,8 @@ func (s Server) Watch(rtr *mux.Router) {
 
 		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", s.Host, s.onliners))
+		_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", s.Host, s.calls))
 
 		if s.checkMessageEnabled() {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
@@ -184,9 +191,11 @@ func (s *Server) updateClient(client *Client, errChan chan error) error {
 	}
 
 	if client.wsSession == nil {
-		client.wsSession, err = client.apiSession.Ws(s.TestTeam, func(err error) {
-			errChan <- err
-		})
+		var onerror func(error)
+		if errChan != nil {
+			onerror = func(err error) { errChan <- err }
+		}
+		client.wsSession, err = client.apiSession.Ws(s.TestTeam, onerror)
 		if err != nil {
 			return err
 		}
@@ -303,6 +312,51 @@ func (s *Server) checkMessage() {
 		}
 	}
 }
+func (s *Server) checkOnliners() {
+	if s.MaxServerOnlineInterval == 0 {
+		s.MaxServerOnlineInterval = 365 * 24 * time.Hour
+	}
+	if s.AliceToken != "" {
+		alice := &Client{
+			Name:  "alice",
+			token: s.AliceToken,
+		}
+
+		ticker := time.NewTicker(s.MaxServerOnlineInterval)
+		for {
+			if err := s.updateClient(alice, nil); err != nil {
+				s.wsFails++
+				log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
+				time.Sleep(retryInterval)
+			}
+
+			listener := alice.wsSession.ListenFor(new(tdproto.ServerOnline))
+			ticker.Reset(s.MaxServerOnlineInterval)
+			select {
+			case raw := <-listener:
+				ev := new(tdproto.ServerOnline)
+				if err := json.Unmarshal(raw, &ev); err != nil {
+					log.Printf("%s server online fail: %s", s, err)
+				}
+
+				if ev.Params.Contacts == nil {
+					s.onliners = 0
+				} else {
+					s.onliners = len(*ev.Params.Contacts)
+				}
+
+				if ev.Params.Calls == nil {
+					s.calls = 0
+				} else {
+					s.calls = len(*ev.Params.Calls)
+				}
+			case <-ticker.C:
+				s.onliners = 0
+				s.calls = 0
+			}
+		}
+	}
+}
 
 func (s *Server) doCheckMessage() error {
 	errChan := make(chan error)
@@ -320,7 +374,7 @@ func (s *Server) doCheckMessage() error {
 			apiSessionTimeout: interval,
 		}
 
-		numTimouts := 0
+		numTimeouts := 0
 		for range time.Tick(interval) {
 			if err := s.updateClient(alice, errChan); err != nil {
 				errChan <- err
@@ -343,8 +397,8 @@ func (s *Server) doCheckMessage() error {
 				s.checkMessageDuration = interval
 				if err == tdclient.Timeout {
 					log.Printf("%s check message: alice got timeout on %s", s, messageId)
-					numTimouts++
-					if numTimouts > maxTimeouts {
+					numTimeouts++
+					if numTimeouts > maxTimeouts {
 						errChan <- err
 						return
 					}
@@ -369,8 +423,8 @@ func (s *Server) doCheckMessage() error {
 				s.checkMessageDuration = time.Since(start)
 				if err == tdclient.Timeout {
 					log.Printf("%s check message: bob got timeout on %s", s, messageId)
-					numTimouts++
-					if numTimouts > maxTimeouts {
+					numTimeouts++
+					if numTimeouts > maxTimeouts {
 						errChan <- maxTimeoutsReached
 						return
 					}
@@ -496,7 +550,7 @@ func (s *Server) wsPing() {
 func (s *Server) doWsPing() error {
 	errChan := make(chan error)
 
-	numTimouts := 0
+	numTimeouts := 0
 	go func() {
 		var err error
 		var aliceClient *tdclient.Session
@@ -538,8 +592,8 @@ func (s *Server) doWsPing() error {
 				s.wsPingDuration = time.Since(start)
 				if err == tdclient.Timeout {
 					log.Printf("%s ws ping: alice got ping timeout on %s", s, uid)
-					numTimouts++
-					if numTimouts > maxTimeouts {
+					numTimeouts++
+					if numTimeouts > maxTimeouts {
 						errChan <- maxTimeoutsReached
 						return
 					}
@@ -560,7 +614,7 @@ func (s *Server) doWsPing() error {
 	return <-errChan
 }
 
-func (s *Server) paniker() {
+func (s *Server) panickier() {
 	for range time.Tick(wsFailsCheck) {
 		if s.wsFails > maxWsFails {
 			log.Panicln("too many ws fails:", s.wsFails)
