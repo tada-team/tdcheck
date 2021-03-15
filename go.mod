@@ -3,6 +3,7 @@ module github.com/tada-team/tdcheck
 go 1.14
 
 require (
+	github.com/dustin/go-humanize v1.0.0
 	github.com/gorilla/mux v1.8.0
 	github.com/pion/webrtc/v2 v2.2.26
 	github.com/pkg/errors v0.9.1
