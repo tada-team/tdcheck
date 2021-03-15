@@ -106,7 +106,7 @@ func (s *Server) Watch(rtr *mux.Router) {
 	go s.checkCall()
 	go s.panickier()
 
-	path := "/" + s.Host
+	path := "/" + strings.TrimPrefix("https://", s.Host)
 	log.Println(
 		"listen path:", path,
 		"|",
