@@ -314,11 +314,11 @@ func (s *Server) checkMessage() {
 }
 func (s *Server) checkOnliners() {
 	if s.MaxServerOnlineInterval == 0 {
-		s.MaxServerOnlineInterval = 365 * 24 * time.Hour
+		s.MaxServerOnlineInterval = time.Hour
 	}
 	if s.AliceToken != "" {
 		alice := &Client{
-			Name:  "alice",
+			Name:  s.String() + "alice",
 			token: s.AliceToken,
 		}
 
