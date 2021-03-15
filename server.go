@@ -16,6 +16,7 @@ import (
 	"github.com/tada-team/kozma"
 	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
+	"github.com/tada-team/timerpool"
 )
 
 const (
@@ -313,49 +314,58 @@ func (s *Server) checkMessage() {
 	}
 }
 func (s *Server) checkOnliners() {
-	if s.MaxServerOnlineInterval == 0 {
-		s.MaxServerOnlineInterval = time.Hour
-	}
-	if s.AliceToken != "" {
+	if s.AliceToken != "" || s.MaxServerOnlineInterval == 0{
 		alice := &Client{
 			Name:  s.String() + "alice",
 			token: s.AliceToken,
 		}
-
-		ticker := time.NewTicker(s.MaxServerOnlineInterval)
 		for {
 			if err := s.updateClient(alice, nil); err != nil {
 				s.wsFails++
 				log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
 				time.Sleep(retryInterval)
 			}
-
-			listener := alice.wsSession.ListenFor(new(tdproto.ServerOnline))
-			ticker.Reset(s.MaxServerOnlineInterval)
-			select {
-			case raw := <-listener:
-				ev := new(tdproto.ServerOnline)
-				if err := json.Unmarshal(raw, &ev); err != nil {
-					log.Printf("%s server online fail: %s", s, err)
-				}
-
-				if ev.Params.Contacts == nil {
-					s.onliners = 0
-				} else {
-					s.onliners = len(*ev.Params.Contacts)
-				}
-
-				if ev.Params.Calls == nil {
-					s.calls = 0
-				} else {
-					s.calls = len(*ev.Params.Calls)
-				}
-			case <-ticker.C:
-				s.onliners = 0
-				s.calls = 0
+			if err := s.waitForServerOnline(alice); err != nil {
+				s.wsFails++
+				log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
+				time.Sleep(retryInterval)
 			}
 		}
 	}
+}
+
+func (s *Server) waitForServerOnline(client *Client) error {
+	timer := timerpool.Get(s.MaxServerOnlineInterval)
+	defer timerpool.Release(timer)
+
+	start := time.Now()
+
+	select {
+	case raw := <-client.wsSession.ListenFor(new(tdproto.ServerOnline)):
+		ev := new(tdproto.ServerOnline)
+		if err := json.Unmarshal(raw, &ev); err != nil {
+			return err
+		}
+
+		if ev.Params.Contacts == nil {
+			s.onliners = 0
+		} else {
+			s.onliners = len(*ev.Params.Contacts)
+		}
+
+		if ev.Params.Calls == nil {
+			s.calls = 0
+		} else {
+			s.calls = len(*ev.Params.Calls)
+		}
+
+		log.Printf("%s got server online in %s: %d calls: %d", s, time.Since(start).Truncate(time.Millisecond), s.onliners, s.calls)
+	case <-timer.C:
+		log.Printf("%s server online n/a (%s)", s, time.Since(start).Truncate(time.Millisecond))
+		s.onliners = 0
+		s.calls = 0
+	}
+	return nil
 }
 
 func (s *Server) doCheckMessage() error {
