@@ -51,6 +51,7 @@ type Server struct {
 	checkCallDuration    time.Duration
 	wsFails              int
 	callsFails           int
+	onliners             int
 }
 
 func (s Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
@@ -118,36 +119,39 @@ func (s Server) Watch(rtr *mux.Router) {
 		log.Printf("%s request", s)
 
 		if s.apiPingEnabled() {
-			io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Milliseconds()))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Milliseconds()))
 		}
 
 		if s.userverPingEnabled() {
-			io.WriteString(w, "# TYPE tdcheck_userver_ping_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_userver_ping_ms{host=\"%s\"} %d\n", s.Host, s.userverPingDuration.Milliseconds()))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_userver_ping_ms gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_userver_ping_ms{host=\"%s\"} %d\n", s.Host, s.userverPingDuration.Milliseconds()))
 		}
 
 		if s.wsPingEnabled() {
-			io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", s.Host, s.wsPingDuration.Milliseconds()))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", s.Host, s.wsPingDuration.Milliseconds()))
 		}
 
+		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", s.Host, s.onliners))
+
 		if s.checkMessageEnabled() {
-			io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", s.Host, s.echoMessageDuration.Milliseconds()))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", s.Host, s.echoMessageDuration.Milliseconds()))
 
-			io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", s.Host, s.checkMessageDuration.Milliseconds()))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", s.Host, s.checkMessageDuration.Milliseconds()))
 
-			io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, s.wsFails))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, s.wsFails))
 		}
 
 		if s.checkCallEnabled() {
-			io.WriteString(w, "# TYPE tdcheck_calls_fails counter\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_calls_fails{host=\"%s\"} %d\n", s.Host, s.callsFails))
-			io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
-			io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.checkCallDuration.Milliseconds()))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_calls_fails counter\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_fails{host=\"%s\"} %d\n", s.Host, s.callsFails))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.checkCallDuration.Milliseconds()))
 		}
 	})
 }
