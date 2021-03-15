@@ -138,8 +138,8 @@ github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/tada-team/dateparse v0.5.4/go.mod h1:zUlTI4tyGEYSKzHJ3Bh+F1MR77L22OpEyLPG4nODAkM=
 github.com/tada-team/kozma v1.1.0 h1:BGwxSK43Dpr6wKoXVTVbdfoTFTptOEhxmni6aCOreJU=
 github.com/tada-team/kozma v1.1.0/go.mod h1:TIsa1b64SsrVPFEqdoJDnMhO3HYFVpN0B0t2GKh93uY=
-github.com/tada-team/tdclient v0.6.0 h1:VDLs7Sh+HJRFK9DLP5dgHM+KKqH7hd7nQRzDIj9KCfA=
-github.com/tada-team/tdclient v0.6.0/go.mod h1:HI+wutl0uOAvyI9YcikV4R8vE7wFzmjbCPTFVtznXtw=
+github.com/tada-team/tdclient v0.6.1 h1:waLEJKJzcYERlmsfIAPPZ/Owjq+oIDhLPg+dJIlKKkw=
+github.com/tada-team/tdclient v0.6.1/go.mod h1:HI+wutl0uOAvyI9YcikV4R8vE7wFzmjbCPTFVtznXtw=
 github.com/tada-team/tdproto v1.25.0/go.mod h1:+dLqh9Mn8Pcu7QgvPdErtNzO0O2utYRdT5QUN/y7Bbc=
 github.com/tada-team/tdproto v1.25.1 h1:Ac03rQ4RpBRqrZxRRZBeyIcShX0rURe4ywNlxL9Dq6I=
 github.com/tada-team/tdproto v1.25.1/go.mod h1:+dLqh9Mn8Pcu7QgvPdErtNzO0O2utYRdT5QUN/y7Bbc=

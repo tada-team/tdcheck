@@ -497,12 +497,19 @@ func (s *Server) doCheckCall() error {
 			apiSessionTimeout: interval,
 		}
 
-		url := "https://" + s.Host
-		iceServer, err := tdclient.GetIceServer(url)
+		if err := s.updateClient(alice, errChan); err != nil {
+			errChan <- err
+			return
+		}
+
+		features, err := alice.apiSession.Features()
 		if err != nil {
 			errChan <- err
 			return
 		}
+
+		iceServer := features.ICEServers[0].Urls
+
 		for range time.Tick(interval) {
 			start := time.Now()
 			if err := s.updateClient(alice, errChan); err != nil {
