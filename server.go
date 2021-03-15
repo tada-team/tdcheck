@@ -78,6 +78,10 @@ func (s *Server) apiPingEnabled() bool {
 	return s.ApiPingInterval > 0
 }
 
+func (s *Server) checkOnlinersEnabled() bool {
+	return s.MaxServerOnlineInterval > 0
+}
+
 func (s *Server) userverPingEnabled() bool {
 	return s.UserverPingInterval > 0 && s.UserverPingPath != ""
 }
@@ -120,6 +124,8 @@ func (s *Server) Watch(rtr *mux.Router) {
 		"message:", s.checkMessageEnabled(),
 		"|",
 		"calls:", s.checkCallEnabled(),
+		"|",
+		"onliners:", s.checkOnlinersEnabled(),
 	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -140,10 +146,12 @@ func (s *Server) Watch(rtr *mux.Router) {
 			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", s.Host, s.wsPingDuration.Milliseconds()))
 		}
 
-		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", s.Host, s.onliners))
-		_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", s.Host, s.calls))
+		if s.checkOnlinersEnabled() {
+			_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", s.Host, s.onliners))
+			_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
+			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", s.Host, s.calls))
+		}
 
 		if s.checkMessageEnabled() {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
@@ -315,7 +323,7 @@ func (s *Server) checkMessage() {
 	}
 }
 func (s *Server) checkOnliners() {
-	if s.AliceToken != "" || s.MaxServerOnlineInterval == 0{
+	if s.checkOnlinersEnabled() {
 		alice := &Client{
 			Name:  s.String() + " alice",
 			token: s.AliceToken,
