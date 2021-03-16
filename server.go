@@ -56,7 +56,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s request", s)
+		log.Printf("%s request", s.Host)
 
 		if s.apiPingEnabled() {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
