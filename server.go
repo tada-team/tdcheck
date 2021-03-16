@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,7 +16,6 @@ import (
 	"github.com/tada-team/kozma"
 	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
-	"github.com/tada-team/timerpool"
 )
 
 const (
@@ -177,7 +175,7 @@ func (s *Server) String() string {
 }
 
 type Client struct {
-	Name string
+	Name    string
 	api     *tdclient.Session
 	ws      *tdclient.WsSession
 	timeout time.Duration
@@ -323,44 +321,49 @@ func (s *Server) checkMessage() {
 }
 
 func (s *Server) checkOnliners() {
-	if s.checkOnlinersEnabled() {
-		client := &Client{
-			Name:    "alice check onliners",
-			token:   s.AliceToken,
-			timeout: s.MaxServerOnlineInterval,
-		}
-		for {
-			if err := s.maybeLogin(client, func(err error) {
-				s.wsFails++
-				log.Printf("%s ws fail #%d (maybe login), %s", s, s.wsFails, err)
-				time.Sleep(retryInterval)
-			}); err != nil {
-				s.wsFails++
-				log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
-				time.Sleep(retryInterval)
-				continue
-			}
-			if err := s.waitForServerOnline(client); err != nil {
-				s.wsFails++
-				log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
-				time.Sleep(retryInterval)
-			}
-		}
+	if !s.checkOnlinersEnabled() {
+		return
 	}
-}
 
-func (s *Server) waitForServerOnline(client *Client) error {
-	timer := timerpool.Get(s.MaxServerOnlineInterval)
-	defer timerpool.Release(timer)
+	lastServerOnline := time.Now()
 
-	start := time.Now()
-
-	select {
-	case raw := <-client.ws.ListenFor(new(tdproto.ServerOnline)):
-		ev := new(tdproto.ServerOnline)
-		if err := json.Unmarshal(raw, &ev); err != nil {
-			return err
+	go func() {
+		for range time.Tick(time.Second) {
+			if time.Since(lastServerOnline) > s.MaxServerOnlineInterval {
+				log.Printf("%s server online n/a (%s), reset", s, time.Since(lastServerOnline).Truncate(time.Millisecond))
+				lastServerOnline = time.Now()
+				s.onliners = 0
+				s.calls = 0
+			}
 		}
+	}()
+
+	client := &Client{
+		Name:    "alice check onliners",
+		token:   s.AliceToken,
+		timeout: s.MaxServerOnlineInterval,
+	}
+
+	for {
+		if err := s.maybeLogin(client, func(err error) {
+			s.wsFails++
+			log.Printf("%s ws fail #%d (maybe login), %s", s, s.wsFails, err)
+			time.Sleep(retryInterval)
+		}); err != nil {
+			s.wsFails++
+			log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
+			time.Sleep(retryInterval)
+			continue
+		}
+
+		start := time.Now()
+
+		ev := new(tdproto.ServerOnline)
+		if err := client.ws.WaitFor(ev); err != nil {
+			continue
+		}
+
+		lastServerOnline = time.Now()
 
 		if ev.Params.Contacts == nil {
 			s.onliners = 0
@@ -375,12 +378,7 @@ func (s *Server) waitForServerOnline(client *Client) error {
 		}
 
 		log.Printf("%s got server online in %s: %d calls: %d", s, time.Since(start).Truncate(time.Millisecond), s.onliners, s.calls)
-	case <-timer.C:
-		log.Printf("%s server online n/a (%s)", s, time.Since(start).Truncate(time.Millisecond))
-		s.onliners = 0
-		s.calls = 0
 	}
-	return nil
 }
 
 func (s *Server) doCheckMessage() error {
