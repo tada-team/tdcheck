@@ -431,13 +431,12 @@ func (s *Server) doCheckMessage() error {
 					errChan <- err
 					return
 				}
-				if !delayed {
-					continue
-				}
-				log.Printf("%s check message: alice got %s", s, msg.MessageId)
-				if msg.MessageId == messageId {
-					log.Printf("%s check message: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
-					break
+				if delayed {
+					log.Printf("%s check message: alice got %s", s, msg.MessageId)
+					if msg.MessageId == messageId {
+						log.Printf("%s check message: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
+						break
+					}
 				}
 			}
 
@@ -457,13 +456,12 @@ func (s *Server) doCheckMessage() error {
 					errChan <- err
 					return
 				}
-				if delayed {
-					continue
-				}
-				log.Printf("%s check message: bob got %s: %s", s, msg.MessageId, msg.PushText)
-				if msg.MessageId == messageId {
-					log.Printf("%s check message: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
-					break
+				if !delayed {
+					log.Printf("%s check message: bob got %s: %s", s, msg.MessageId, msg.PushText)
+					if msg.MessageId == messageId {
+						log.Printf("%s check message: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
+						break
+					}
 				}
 			}
 
@@ -477,8 +475,18 @@ func (s *Server) doCheckMessage() error {
 
 func (s *Server) checkCall() {
 	if s.checkCallEnabled() {
+		alice := &Client{
+			Name:    "alice",
+			token:   s.AliceToken,
+			timeout: s.CheckCallInterval,
+		}
+		bob := &Client{
+			Name:    "bob",
+			token:   s.BobToken,
+			timeout: s.CheckCallInterval,
+		}
 		for {
-			if err := s.doCheckCall(); err != nil {
+			if err := s.doCheckCall(alice, bob); err != nil {
 				s.callsFails++
 				s.checkCallDuration = s.CheckCallInterval
 				log.Printf("%s check calls: fatal #%d, %s", s, s.wsFails, err)
@@ -504,64 +512,40 @@ func (s *Server) webRtcConnect(client *Client, jid *tdproto.JID, iceServer strin
 	return peerConnection, nil
 }
 
-func (s *Server) doCheckCall() error {
+func (s *Server) doCheckCall(alice, bob *Client) error {
 	errChan := make(chan error)
 	onerror := func(err error) { errChan <- err }
 
-	go func() {
-		interval := s.CheckCallInterval
-		alice := &Client{
-			Name:    "alice",
-			token:   s.AliceToken,
-			timeout: interval,
-		}
+	if err := s.maybeLogin(alice, onerror); err != nil {
+		return err
+	}
 
-		bob := &Client{
-			Name:    "bob",
-			token:   s.BobToken,
-			timeout: interval,
-		}
+	if err := s.maybeLogin(bob, onerror); err != nil {
+		return err
+	}
 
-		if err := s.maybeLogin(alice, onerror); err != nil {
-			errChan <- err
-			return
-		}
+	features, err := alice.api.Features()
+	if err != nil {
+		return err
+	}
 
-		features, err := alice.api.Features()
+	iceServer := features.ICEServers[0].Urls
+
+	for range time.Tick(s.CheckCallInterval) {
+		start := time.Now()
+
+		peerConnection, err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, alice.Name)
 		if err != nil {
-			errChan <- err
-			return
+			return err
 		}
 
-		iceServer := features.ICEServers[0].Urls
-
-		for range time.Tick(interval) {
-			start := time.Now()
-			if err := s.maybeLogin(alice, onerror); err != nil {
-				errChan <- err
-				return
-			}
-
-			if err := s.maybeLogin(bob, onerror); err != nil {
-				errChan <- err
-				return
-			}
-
-			peerConnection, err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, alice.Name)
-			if err != nil {
-				errChan <- err
-				return
-			}
-
-			tdclient.SendCallLeave(alice.ws, alice.Name, bob.contact.Jid.JID())
-			s.checkCallDuration = time.Since(start)
-			log.Printf("%s call test: %s OK", s, s.checkCallDuration.Truncate(time.Millisecond))
-			if err := peerConnection.Close(); err != nil {
-				errChan <- err
-				return
-			}
+		tdclient.SendCallLeave(alice.ws, alice.Name, bob.contact.Jid.JID())
+		s.checkCallDuration = time.Since(start)
+		log.Printf("%s call test: %s OK", s, s.checkCallDuration.Truncate(time.Millisecond))
+		if err := peerConnection.Close(); err != nil {
+			return err
 		}
-	}()
+	}
 
 	return <-errChan
 }
