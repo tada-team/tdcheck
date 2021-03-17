@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pion/webrtc/v2"
-	"github.com/pkg/errors"
 	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
 
@@ -19,11 +18,8 @@ import (
 const (
 	retryInterval = time.Second
 	wsFailsCheck  = time.Minute
-	maxTimeouts   = 10
 	maxWsFails    = 120
 )
-
-var maxTimeoutsReached = errors.New("max timeouts")
 
 func ServerWatch(s Server, rtr *mux.Router) {
 	var wsFails int
@@ -159,14 +155,6 @@ func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Sessio
 	return &sess, nil
 }
 
-//func (s *Server) apiPingEnabled() bool {
-//	return s.ApiPingInterval > 0
-//}
-
-//func (s *Server) checkMessageEnabled() bool {
-//	return s.CheckMessageInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
-//}
-
 func (s *Server) checkCallEnabled() bool {
 	return s.CheckCallInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
 }
@@ -210,28 +198,6 @@ func (s *Server) maybeLogin(c *Client, onerror func(error)) error {
 
 	return nil
 }
-
-//func (s *Server) checkMessage() {
-//	if s.checkMessageEnabled() {
-//		for {
-//			if err := s.doCheckMessage(); err != nil {
-//				s.wsFails++
-//				s.echoMessageDuration = s.CheckMessageInterval
-//				s.checkMessageDuration = s.CheckMessageInterval
-//				log.Printf("%s check message: fatal #%d, %s", s, s.wsFails, err)
-//				time.Sleep(retryInterval)
-//			}
-//		}
-//	}
-//}
-
-//func (s *Server) doCheckMessage() error {
-//	errChan := make(chan error)
-//	go func() {
-//	}()
-//
-//	return <-errChan
-//}
 
 func (s *Server) checkCall() {
 	if s.checkCallEnabled() {
