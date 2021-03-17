@@ -10,7 +10,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pion/webrtc/v2"
 	"github.com/pkg/errors"
-	"github.com/tada-team/kozma"
 	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
 
@@ -27,6 +26,18 @@ const (
 var maxTimeoutsReached = errors.New("max timeouts")
 
 func ServerWatch(s Server, rtr *mux.Router) {
+	var wsFails int
+	go func() {
+		for range time.Tick(wsFailsCheck) {
+			if wsFails > maxWsFails {
+				log.Panicln("too many ws fails:", wsFails)
+			}
+			if wsFails > 0 {
+				wsFails--
+			}
+		}
+	}()
+
 	var apiPing checkers.UrlChecker
 	apiPing.Host = s.Host
 	apiPing.Name = "tdcheck_api_ping_ms"
@@ -50,18 +61,33 @@ func ServerWatch(s Server, rtr *mux.Router) {
 
 	wsPing := checkers.NewWsPingChecker()
 	wsPing.Host = s.Host
-	wsPing.Name = "tdcheck_ws_ping_ms"
+	wsPing.Fails = &wsFails
 	wsPing.Interval = s.WsPingInterval
 	wsPing.Team = s.TestTeam
 	wsPing.AliceToken = s.AliceToken
-	wsPing.BobToken = s.BobToken
 	wsPing.Verbose = s.Verbose
 	go wsPing.Start()
 
-	go s.checkMessage()
-	go s.checkOnliners()
+	checkOnliners := checkers.NewOnlinersChecker()
+	checkOnliners.Host = s.Host
+	checkOnliners.Fails = &wsFails
+	checkOnliners.Interval = s.MaxServerOnlineInterval
+	checkOnliners.Team = s.TestTeam
+	checkOnliners.AliceToken = s.AliceToken
+	checkOnliners.Verbose = s.Verbose
+	go checkOnliners.Start()
+
+	checkMessage := checkers.NewMessageChecker()
+	checkMessage.Host = s.Host
+	checkMessage.Fails = &wsFails
+	checkMessage.Interval = s.CheckMessageInterval
+	checkMessage.Team = s.TestTeam
+	checkMessage.AliceToken = s.AliceToken
+	checkMessage.BobToken = s.BobToken
+	checkMessage.Verbose = s.Verbose
+	go checkMessage.Start()
+
 	go s.checkCall()
-	go s.panickier()
 
 	path := "/" + s.Host
 	log.Println(
@@ -70,9 +96,9 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		"| nginx:", nginxPing.Enabled(),
 		"| userver:", userverPing.Enabled(),
 		"| ws ping:", wsPing.Enabled(),
-		"| message:", s.checkMessageEnabled(),
+		"| message:", checkMessage.Enabled(),
 		"| calls:", s.checkCallEnabled(),
-		"| onliners:", s.checkOnlinersEnabled(),
+		"| onliners:", checkOnliners.Enabled(),
 	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -82,24 +108,8 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		nginxPing.Report(w)
 		userverPing.Report(w)
 		wsPing.Report(w)
-
-		if s.checkOnlinersEnabled() {
-			_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", s.Host, s.onliners))
-			_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", s.Host, s.calls))
-		}
-
-		if s.checkMessageEnabled() {
-			_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", s.Host, s.echoMessageDuration.Milliseconds()))
-
-			_, _ = io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", s.Host, s.checkMessageDuration.Milliseconds()))
-
-			_, _ = io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, s.wsFails))
-		}
+		checkOnliners.Report(w)
+		checkMessage.Report(w)
 
 		if s.checkCallEnabled() {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_calls_fails counter\n")
@@ -107,6 +117,9 @@ func ServerWatch(s Server, rtr *mux.Router) {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
 			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", s.Host, s.checkCallDuration.Milliseconds()))
 		}
+
+		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, wsFails))
 	})
 }
 
@@ -120,24 +133,17 @@ type Server struct {
 
 	ApiPingInterval time.Duration `yaml:"api_ping_interval"`
 
-	NginxPingInterval time.Duration `yaml:"nginx_ping_interval"`
+	NginxPingInterval       time.Duration `yaml:"nginx_ping_interval"`
+	WsPingInterval          time.Duration `yaml:"ws_ping_interval"`
+	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
 
 	UServerPingInterval time.Duration `yaml:"userver_ping_interval"`
 	UServerPingPath     string        `yaml:"userver_ping_path"`
 
-	WsPingInterval time.Duration `yaml:"ws_ping_interval"`
-	wsPingDuration time.Duration
-
-	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
-	onliners                int
-	calls                   int
-
 	CheckMessageInterval time.Duration `yaml:"check_message_interval"`
 	CheckCallInterval    time.Duration `yaml:"check_call_interval"`
-	echoMessageDuration  time.Duration
-	checkMessageDuration time.Duration
+
 	checkCallDuration    time.Duration
-	wsFails              int
 	callsFails           int
 }
 
@@ -153,21 +159,13 @@ func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Sessio
 	return &sess, nil
 }
 
-func (s *Server) apiPingEnabled() bool {
-	return s.ApiPingInterval > 0
-}
-
-func (s *Server) checkOnlinersEnabled() bool {
-	return s.MaxServerOnlineInterval > 0
-}
-
-//func (s *Server) wsPingEnabled() bool {
-//	return s.WsPingInterval > 0 && s.TestTeam != "" && s.AliceToken != ""
+//func (s *Server) apiPingEnabled() bool {
+//	return s.ApiPingInterval > 0
 //}
 
-func (s *Server) checkMessageEnabled() bool {
-	return s.CheckMessageInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
-}
+//func (s *Server) checkMessageEnabled() bool {
+//	return s.CheckMessageInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
+//}
 
 func (s *Server) checkCallEnabled() bool {
 	return s.CheckCallInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
@@ -213,172 +211,27 @@ func (s *Server) maybeLogin(c *Client, onerror func(error)) error {
 	return nil
 }
 
-func (s *Server) checkMessage() {
-	if s.checkMessageEnabled() {
-		for {
-			if err := s.doCheckMessage(); err != nil {
-				s.wsFails++
-				s.echoMessageDuration = s.CheckMessageInterval
-				s.checkMessageDuration = s.CheckMessageInterval
-				log.Printf("%s check message: fatal #%d, %s", s, s.wsFails, err)
-				time.Sleep(retryInterval)
-			}
-		}
-	}
-}
+//func (s *Server) checkMessage() {
+//	if s.checkMessageEnabled() {
+//		for {
+//			if err := s.doCheckMessage(); err != nil {
+//				s.wsFails++
+//				s.echoMessageDuration = s.CheckMessageInterval
+//				s.checkMessageDuration = s.CheckMessageInterval
+//				log.Printf("%s check message: fatal #%d, %s", s, s.wsFails, err)
+//				time.Sleep(retryInterval)
+//			}
+//		}
+//	}
+//}
 
-func (s *Server) checkOnliners() {
-	if !s.checkOnlinersEnabled() {
-		return
-	}
-
-	lastServerOnline := time.Now()
-
-	go func() {
-		for range time.Tick(time.Second) {
-			if time.Since(lastServerOnline) > s.MaxServerOnlineInterval {
-				log.Printf("%s server online n/a (%s), reset", s, time.Since(lastServerOnline).Truncate(time.Millisecond))
-				lastServerOnline = time.Now()
-				s.onliners = 0
-				s.calls = 0
-			}
-		}
-	}()
-
-	client := &Client{
-		Name:    "alice check onliners",
-		token:   s.AliceToken,
-		timeout: s.MaxServerOnlineInterval,
-	}
-
-	for {
-		if err := s.maybeLogin(client, func(err error) {
-			s.wsFails++
-			log.Printf("%s ws fail #%d (maybe login), %s", s, s.wsFails, err)
-			time.Sleep(retryInterval)
-		}); err != nil {
-			s.wsFails++
-			log.Printf("%s ws fail #%d, %s", s, s.wsFails, err)
-			time.Sleep(retryInterval)
-			continue
-		}
-
-		start := time.Now()
-
-		ev := new(tdproto.ServerOnline)
-		if err := client.ws.WaitFor(ev); err != nil {
-			continue
-		}
-
-		lastServerOnline = time.Now()
-
-		if ev.Params.Contacts == nil {
-			s.onliners = 0
-		} else {
-			s.onliners = len(*ev.Params.Contacts)
-		}
-
-		if ev.Params.Calls == nil {
-			s.calls = 0
-		} else {
-			s.calls = len(*ev.Params.Calls)
-		}
-
-		log.Printf("%s got server online in %s: %d calls: %d", s, time.Since(start).Truncate(time.Millisecond), s.onliners, s.calls)
-	}
-}
-
-func (s *Server) doCheckMessage() error {
-	errChan := make(chan error)
-	go func() {
-		interval := s.CheckMessageInterval
-		alice := &Client{
-			Name:    "alice",
-			token:   s.AliceToken,
-			timeout: interval,
-		}
-
-		bob := &Client{
-			Name:    "bob",
-			token:   s.BobToken,
-			timeout: interval,
-		}
-
-		numTimeouts := 0
-		for range time.Tick(interval) {
-			if err := s.maybeLogin(alice, func(err error) { errChan <- err }); err != nil {
-				errChan <- err
-				return
-			}
-
-			if err := s.maybeLogin(bob, func(err error) { errChan <- err }); err != nil {
-				errChan <- err
-				return
-			}
-
-			start := time.Now()
-			text := kozma.Say()
-			messageId := alice.ws.SendPlainMessage(bob.contact.Jid, text)
-			log.Printf("%s check message: alice send %s: %s", s, messageId, text)
-
-			for time.Since(start) < interval {
-				msg, delayed, err := alice.ws.WaitForMessage()
-				s.echoMessageDuration = time.Since(start)
-				s.checkMessageDuration = interval
-				if err == tdclient.Timeout {
-					log.Printf("%s check message: alice got timeout on %s", s, messageId)
-					numTimeouts++
-					if numTimeouts > maxTimeouts {
-						errChan <- err
-						return
-					}
-					break
-				}
-				if err != nil {
-					errChan <- err
-					return
-				}
-				if delayed {
-					log.Printf("%s check message: alice got %s", s, msg.MessageId)
-					if msg.MessageId == messageId {
-						log.Printf("%s check message: echo %s OK", s, s.echoMessageDuration.Truncate(time.Millisecond))
-						break
-					}
-				}
-			}
-
-			for time.Since(start) < interval {
-				msg, delayed, err := bob.ws.WaitForMessage()
-				s.checkMessageDuration = time.Since(start)
-				if err == tdclient.Timeout {
-					log.Printf("%s check message: bob got timeout on %s", s, messageId)
-					numTimeouts++
-					if numTimeouts > maxTimeouts {
-						errChan <- maxTimeoutsReached
-						return
-					}
-					break
-				}
-				if err != nil {
-					errChan <- err
-					return
-				}
-				if !delayed {
-					log.Printf("%s check message: bob got %s: %s", s, msg.MessageId, msg.PushText)
-					if msg.MessageId == messageId {
-						log.Printf("%s check message: delivery %s OK", s, s.checkMessageDuration.Truncate(time.Millisecond))
-						break
-					}
-				}
-			}
-
-			log.Printf("%s check message: alice drop %s", s, messageId)
-			alice.ws.DeleteMessage(messageId)
-		}
-	}()
-
-	return <-errChan
-}
+//func (s *Server) doCheckMessage() error {
+//	errChan := make(chan error)
+//	go func() {
+//	}()
+//
+//	return <-errChan
+//}
 
 func (s *Server) checkCall() {
 	if s.checkCallEnabled() {
@@ -396,7 +249,7 @@ func (s *Server) checkCall() {
 			if err := s.doCheckCall(alice, bob); err != nil {
 				s.callsFails++
 				s.checkCallDuration = s.CheckCallInterval
-				log.Printf("%s check calls: fatal #%d, %s", s, s.wsFails, err)
+				log.Printf("%s check calls: fatal #%d, %s", s, s.callsFails, err)
 				time.Sleep(retryInterval)
 			}
 		}
@@ -456,15 +309,4 @@ func (s *Server) doCheckCall(alice, bob *Client) error {
 	}
 
 	return <-errChan
-}
-
-func (s *Server) panickier() {
-	for range time.Tick(wsFailsCheck) {
-		if s.wsFails > maxWsFails {
-			log.Panicln("too many ws fails:", s.wsFails)
-		}
-		if s.wsFails > 0 {
-			s.wsFails--
-		}
-	}
 }

@@ -10,7 +10,8 @@ import (
 
 func NewWsPingChecker() *wsPingChecker {
 	p := new(wsPingChecker)
-	p.do = p.doPingCheck
+	p.do = p.doCheck
+	p.Name = "tdcheck_ws_ping_ms"
 	return p
 }
 
@@ -19,7 +20,7 @@ type wsPingChecker struct {
 	duration time.Duration
 }
 
-func (p *wsPingChecker) doPingCheck() error {
+func (p *wsPingChecker) doCheck() error {
 	start := time.Now()
 
 	uid := p.aliceWsSession.Ping()
@@ -40,7 +41,7 @@ func (p *wsPingChecker) doPingCheck() error {
 
 func (p *wsPingChecker) Report(w http.ResponseWriter) {
 	if p.Enabled() {
-		_, _ = io.WriteString(w, fmt.Sprintf("# TYPE %s gauge\n", p.Name))
-		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.Host, p.duration.Milliseconds()))
+		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))
 	}
 }

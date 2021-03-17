@@ -31,10 +31,8 @@ type BaseUserChecker struct {
 	Team       string
 	AliceToken string
 	BobToken   string
-	Do func(checker *BaseUserChecker) error
 	Verbose    bool
-
-	fails int
+	Fails      *int
 
 	aliceSession   *tdclient.Session
 	aliceWsSession *tdclient.WsSession
@@ -63,14 +61,14 @@ func (p *BaseUserChecker) Start() {
 		if err == nil {
 			return
 		}
-		p.fails++
-		log.Printf("[%s] %s: fatal #%d, %s", p.Host, p.Name, p.fails, err)
+		*p.Fails++
+		log.Printf("[%s] %s: fatal #%d, %s", p.Host, p.Name, *p.Fails, err)
 		time.Sleep(retryInterval)
 	}
 
 	var err error
 	for {
-		if p.aliceSession == nil || p.aliceWsSession == nil {
+		if p.AliceToken != "" && (p.aliceSession == nil || p.aliceWsSession == nil) {
 			p.aliceSession, p.aliceWsSession, err = p.auth(p.AliceToken, func(err error) {
 				onfail(err)
 				log.Printf("[%s] %s: reset alice session", p.Host, p.Name)
@@ -82,12 +80,12 @@ func (p *BaseUserChecker) Start() {
 			}
 		}
 
-		if p.bobSession == nil || p.bobWsSession == nil {
-			p.bobSession, p.bobWsSession, err = p.auth(p.AliceToken, onfail)
+		if p.BobToken != "" && (p.bobSession == nil || p.bobWsSession == nil) {
+			p.bobSession, p.bobWsSession, err = p.auth(p.BobToken, onfail)
 			if err != nil {
 				onfail(err)
 				log.Printf("[%s] %s: reset bob session", p.Host, p.Name)
-				p.bobSession, p.bobSession = nil, nil
+				p.bobSession, p.bobWsSession = nil, nil
 				continue
 			}
 		}
