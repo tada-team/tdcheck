@@ -73,16 +73,22 @@ func (p *messageChecker) doCheck() error {
 			p.checkMessageDuration = p.Interval
 			return err
 		}
-		if delayed && msg.Chat.JID().Equal(p.bobJid) {
-			log.Printf("[%s] %s: alice got `%s` (gentime: %v)", p.Host, p.Name, msg.PushText, msg.Gentime)
-			if msg.MessageId == messageId {
-				log.Printf("[%s] %s: echo ok (%s)", p.Host, p.Name, p.echoMessageDuration.Round(time.Millisecond))
-				p.echoMessageDuration = time.Since(start)
-				break
-			} else {
-				log.Printf("[%s] %s: echo skip", p.Host, p.Name)
-			}
+
+		if !delayed || !msg.Chat.JID().Equal(p.bobJid) {
+			continue
 		}
+
+		log.Printf("[%s] %s: alice got `%s` (gentime: %v)", p.Host, p.Name, msg.PushText, msg.Gentime)
+		if msg.MessageId == messageId {
+			log.Printf("[%s] %s: echo ok (%s)", p.Host, p.Name, p.echoMessageDuration.Round(time.Millisecond))
+			p.echoMessageDuration = time.Since(start)
+			break
+		}
+	}
+
+	if p.echoMessageDuration == p.Interval{
+		p.checkMessageDuration = p.Interval
+		return nil
 	}
 
 	for time.Since(start) < p.Interval {
@@ -99,15 +105,16 @@ func (p *messageChecker) doCheck() error {
 			p.checkMessageDuration = p.Interval
 			return err
 		}
-		if !delayed && msg.Chat.JID().Equal(p.bobJid) {
-			log.Printf("[%s] %s: bob got %s: `%s` (gentime: %v)", p.Host, p.Name, msg.MessageId, msg.PushText, msg.Gentime)
-			if msg.MessageId == messageId {
-				log.Printf("[%s] %s: delivery ok (%s)", p.Host, p.Name, p.checkMessageDuration.Round(time.Millisecond))
-				p.checkMessageDuration = time.Since(start)
-				break
-			} else {
-				log.Printf("[%s] %s: delivery skip", p.Host, p.Name)
-			}
+
+		if delayed {
+			continue
+		}
+
+		log.Printf("[%s] %s: bob got %s: `%s` (gentime: %v)", p.Host, p.Name, msg.MessageId, msg.PushText, msg.Gentime)
+		if msg.MessageId == messageId {
+			log.Printf("[%s] %s: delivery ok (%s)", p.Host, p.Name, p.checkMessageDuration.Round(time.Millisecond))
+			p.checkMessageDuration = time.Since(start)
+			break
 		}
 	}
 
