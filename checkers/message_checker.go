@@ -49,22 +49,25 @@ func (p *messageChecker) doCheck() error {
 
 	for time.Since(start) < p.Interval {
 		msg, delayed, err := p.aliceWsSession.WaitForMessage()
-		p.echoMessageDuration = time.Since(start)
-		p.checkMessageDuration = p.Interval
 		if err == tdclient.Timeout {
 			log.Printf("[%s] %s: alice got timeout on `%s`", p.Host, p.Name, text)
 			p.numTimeouts++
 			if p.numTimeouts > p.maxTimeouts {
+				p.echoMessageDuration = p.Interval
+				p.checkMessageDuration = p.Interval
 				return err
 			}
 			break
 		} else if err != nil {
+			p.echoMessageDuration = p.Interval
+			p.checkMessageDuration = p.Interval
 			return err
 		}
 		if delayed && msg.Chat.JID().Equal(p.bobJid) {
 			log.Printf("[%s] %s: alice got `%s` (gentime: %v)", p.Host, p.Name, msg.PushText, msg.Gentime)
 			if msg.MessageId == messageId {
 				log.Printf("[%s] %s: echo ok (%s)", p.Host, p.Name, p.echoMessageDuration.Round(time.Millisecond))
+				p.echoMessageDuration = time.Since(start)
 				break
 			} else {
 				log.Printf("[%s] %s: echo skip", p.Host, p.Name)
@@ -74,21 +77,23 @@ func (p *messageChecker) doCheck() error {
 
 	for time.Since(start) < p.Interval {
 		msg, delayed, err := p.bobWsSession.WaitForMessage()
-		p.checkMessageDuration = time.Since(start)
 		if err == tdclient.Timeout {
 			log.Printf("[%s] %s: bob got timeout on `%s`", p.Host, p.Name, text)
 			p.numTimeouts++
 			if p.numTimeouts > p.maxTimeouts {
+				p.checkMessageDuration = p.Interval
 				return err
 			}
 			break
 		} else if err != nil {
+			p.checkMessageDuration = p.Interval
 			return err
 		}
 		if !delayed && msg.Chat.JID().Equal(p.bobJid) {
 			log.Printf("[%s] %s: bob got %s: `%s` (gentime: %v)", p.Host, p.Name, msg.MessageId, msg.PushText, msg.Gentime)
 			if msg.MessageId == messageId {
 				log.Printf("[%s] %s: delivery ok (%s)", p.Host, p.Name, p.checkMessageDuration.Round(time.Millisecond))
+				p.checkMessageDuration = time.Since(start)
 				break
 			} else {
 				log.Printf("[%s] %s: delivery skip", p.Host, p.Name)
