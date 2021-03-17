@@ -113,16 +113,17 @@ func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnectio
 	var mediaEngine webrtc.MediaEngine
 	mediaEngine.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
 
-	// Add codecs
 	audioCodecs := mediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeAudio)
 	if len(audioCodecs) == 0 {
 		return nil, offer, nil, err
 	}
+
 	outputTrack, err = peerConnection.NewTrack(audioCodecs[0].PayloadType, rand.Uint32(), "audio", "pion")
 	if err != nil {
 		return nil, offer, nil, err
 	}
-	if _, err = peerConnection.AddTrack(outputTrack); err != nil {
+
+	if _, err := peerConnection.AddTrack(outputTrack); err != nil {
 		return nil, offer, nil, err
 	}
 
@@ -131,13 +132,11 @@ func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnectio
 		return nil, offer, nil, err
 	}
 
-	err = mediaEngine.PopulateFromSDP(offer)
-	if err != nil {
+	if err := mediaEngine.PopulateFromSDP(offer); err != nil {
 		return nil, offer, nil, err
 	}
 
-	err = peerConnection.SetLocalDescription(offer)
-	if err != nil {
+	if err := peerConnection.SetLocalDescription(offer); err != nil {
 		return nil, offer, nil, err
 	}
 
