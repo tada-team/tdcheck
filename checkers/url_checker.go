@@ -43,14 +43,14 @@ func (p *UrlChecker) Start() {
 		start := time.Now()
 		content, err := checkContent(p.url)
 		if err != nil || len(content) == 0 {
-			log.Printf("[%s] %s: %s fail: %v", p.host, p.name, p.duration.Truncate(time.Millisecond), err)
+			log.Printf("[%s] %s: %s fail: %v", p.host, p.name, p.duration.Round(time.Millisecond), err)
 			p.duration = p.interval
 			continue
 		}
 
 		p.duration = time.Since(start)
 		size := humanize.Bytes(uint64(len(content)))
-		log.Printf("[%s] %s: %s (%s)", p.host, p.name, p.duration.Truncate(time.Millisecond), size)
+		log.Printf("[%s] %s: %s (%s)", p.host, p.name, p.duration.Round(time.Millisecond), size)
 
 		<-ticker.C
 	}
