@@ -18,6 +18,9 @@ func NewUrlChecker(prefix, name, url string, interval time.Duration) *UrlChecker
 		name:     name,
 		url:      url,
 		interval: interval,
+		client: http.Client{
+			Timeout: interval,
+		},
 	}
 }
 
@@ -27,6 +30,7 @@ type UrlChecker struct {
 	url      string
 	interval time.Duration
 	duration time.Duration
+	client   http.Client
 }
 
 func (p *UrlChecker) Enabled() bool { return p.interval > 0 && p.url != "" }
@@ -41,7 +45,7 @@ func (p *UrlChecker) Start() {
 
 	for {
 		start := time.Now()
-		content, err := checkContent(p.url)
+		content, err := p.checkContent()
 		if err != nil || len(content) == 0 {
 			log.Printf("[%s] %s: %s fail: %v", p.host, p.name, p.duration.Round(time.Millisecond), err)
 			p.duration = p.interval
@@ -63,13 +67,13 @@ func (p *UrlChecker) Report(w http.ResponseWriter) {
 	}
 }
 
-func checkContent(url string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
+func (p *UrlChecker) checkContent() ([]byte, error) {
+	req, err := http.NewRequest("GET", p.url, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request fail")
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "client do fail")
 	}
