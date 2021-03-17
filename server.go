@@ -3,19 +3,19 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/pion/webrtc/v2"
 	"github.com/pkg/errors"
 	"github.com/tada-team/kozma"
 	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
+
+	"github.com/tada-team/tdcheck/checkers"
 )
 
 const (
@@ -28,8 +28,15 @@ const (
 var maxTimeoutsReached = errors.New("max timeouts")
 
 func ServerWatch(s Server, rtr *mux.Router) {
-	go s.apiPing()
-	go s.userverPing()
+	apiPing := checkers.NewUrlChecker(s.Host, "tdcheck_api_ping_ms", s.GetHost()+"/api/v4/ping", s.ApiPingInterval)
+	go apiPing.Start()
+
+	nginxPing := checkers.NewUrlChecker(s.Host, "tdcheck_nginx_ping_ms", s.GetHost()+"/ping.txt", s.NginxPingInterval)
+	go nginxPing.Start()
+
+	userverPing := checkers.NewUrlChecker(s.Host, "tdcheck_userver_ping_ms", s.GetHost()+s.UServerPingPath, s.UServerPingInterval)
+	go userverPing.Start()
+
 	go s.wsPing()
 	go s.checkMessage()
 	go s.checkOnliners()
@@ -39,32 +46,21 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	path := "/" + s.Host
 	log.Println(
 		"listen path:", path,
-		"|",
-		"api ping:", s.apiPingEnabled(),
-		"|",
-		"ws ping:", s.wsPingEnabled(),
-		"|",
-		"userver:", s.userverPingEnabled(),
-		"|",
-		"message:", s.checkMessageEnabled(),
-		"|",
-		"calls:", s.checkCallEnabled(),
-		"|",
-		"onliners:", s.checkOnlinersEnabled(),
+		"| api:", apiPing.Enabled(),
+		"| nginx:", nginxPing.Enabled(),
+		"| userver:", userverPing.Enabled(),
+		"| ws ping:", s.wsPingEnabled(),
+		"| message:", s.checkMessageEnabled(),
+		"| calls:", s.checkCallEnabled(),
+		"| onliners:", s.checkOnlinersEnabled(),
 	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] request", s.Host)
 
-		if s.apiPingEnabled() {
-			_, _ = io.WriteString(w, "# TYPE tdcheck_api_ping_ms gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_api_ping_ms{host=\"%s\"} %d\n", s.Host, s.apiPingDuration.Milliseconds()))
-		}
-
-		if s.userverPingEnabled() {
-			_, _ = io.WriteString(w, "# TYPE tdcheck_userver_ping_ms gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_userver_ping_ms{host=\"%s\"} %d\n", s.Host, s.userverPingDuration.Milliseconds()))
-		}
+		apiPing.Report(w)
+		nginxPing.Report(w)
+		userverPing.Report(w)
 
 		if s.wsPingEnabled() {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
@@ -107,14 +103,14 @@ type Server struct {
 	Verbose    bool   `yaml:"verbose"`
 
 	ApiPingInterval time.Duration `yaml:"api_ping_interval"`
-	apiPingDuration time.Duration
+
+	NginxPingInterval time.Duration `yaml:"nginx_ping_interval"`
+
+	UServerPingInterval time.Duration `yaml:"userver_ping_interval"`
+	UServerPingPath     string        `yaml:"userver_ping_path"`
 
 	WsPingInterval time.Duration `yaml:"ws_ping_interval"`
 	wsPingDuration time.Duration
-
-	UserverPingInterval time.Duration `yaml:"userver_ping_interval"`
-	UserverPingPath     string        `yaml:"userver_ping_path"`
-	userverPingDuration time.Duration
 
 	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
 	onliners                int
@@ -129,13 +125,16 @@ type Server struct {
 	callsFails           int
 }
 
-func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
+func (s *Server) GetHost() string {
 	url := s.Host
 	if !strings.HasPrefix(url, "http") {
 		url = "https://" + url
 	}
+	return url
+}
 
-	sess, err := tdclient.NewSession(url)
+func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
+	sess, err := tdclient.NewSession(s.GetHost())
 	if err != nil {
 		return nil, err
 	}
@@ -152,10 +151,6 @@ func (s *Server) apiPingEnabled() bool {
 
 func (s *Server) checkOnlinersEnabled() bool {
 	return s.MaxServerOnlineInterval > 0
-}
-
-func (s *Server) userverPingEnabled() bool {
-	return s.UserverPingInterval > 0 && s.UserverPingPath != ""
 }
 
 func (s *Server) wsPingEnabled() bool {
@@ -208,102 +203,6 @@ func (s *Server) maybeLogin(c *Client, onerror func(error)) error {
 	}
 
 	return nil
-}
-
-func (s *Server) apiPing() {
-	if !s.apiPingEnabled() {
-		return
-	}
-
-	var err error
-	var client *tdclient.Session
-
-	interval := s.ApiPingInterval
-	for range time.Tick(interval) {
-		if client == nil {
-			client, err = s.tdClient(s.BobToken, interval)
-			if err != nil {
-				log.Printf("%s api ping: connect error: %s", s, err)
-				s.apiPingDuration = interval
-				continue
-			}
-		}
-
-		start := time.Now()
-
-		err := client.Ping()
-		s.apiPingDuration = time.Since(start)
-
-		if err != nil {
-			log.Printf("%s api ping: %s fail: %s", s, s.apiPingDuration.Truncate(time.Millisecond), err)
-			s.apiPingDuration = interval
-			continue
-		}
-
-		log.Printf("%s api ping: %s OK", s, s.apiPingDuration.Truncate(time.Millisecond))
-	}
-}
-
-func (s *Server) userverPing() {
-	if !s.userverPingEnabled() {
-		return
-	}
-
-	interval := s.UserverPingInterval
-	for range time.Tick(interval) {
-		start := time.Now()
-		content, err := s.checkContent(s.UserverPingPath)
-		s.userverPingDuration = time.Since(start)
-
-		if err != nil || len(content) == 0 {
-			log.Printf(
-				"%s userver ping: %s fail: %v",
-				s,
-				s.userverPingDuration.Truncate(time.Millisecond),
-				err,
-			)
-			s.userverPingDuration = interval
-			continue
-		}
-
-		log.Printf(
-			"%s userver ping: %s %s OK: %s",
-			s,
-			s.UserverPingPath,
-			s.userverPingDuration.Truncate(time.Millisecond),
-			humanize.Bytes(uint64(len(content))),
-		)
-	}
-}
-
-func (s *Server) checkContent(path string) ([]byte, error) {
-	if strings.HasPrefix(s.Host, "http") {
-		path = s.Host + path
-	} else {
-		path = "https://" + s.Host + path
-	}
-
-	req, err := http.NewRequest("GET", path, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "new request fail")
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "client do fail")
-	}
-	defer resp.Body.Close()
-
-	respData, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, "read body fail")
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, errors.Wrapf(err, "status code: %d %s", resp.StatusCode, string(respData))
-	}
-
-	return respData, nil
 }
 
 func (s *Server) checkMessage() {
@@ -516,23 +415,24 @@ func (s *Server) doCheckCall(alice, bob *Client) error {
 	errChan := make(chan error)
 	onerror := func(err error) { errChan <- err }
 
-	if err := s.maybeLogin(alice, onerror); err != nil {
-		return err
-	}
-
-	if err := s.maybeLogin(bob, onerror); err != nil {
-		return err
-	}
-
-	features, err := alice.api.Features()
-	if err != nil {
-		return err
-	}
-
-	iceServer := features.ICEServers[0].Urls
-
+	var iceServer string
 	for range time.Tick(s.CheckCallInterval) {
 		start := time.Now()
+		if err := s.maybeLogin(alice, onerror); err != nil {
+			return err
+		}
+
+		if err := s.maybeLogin(bob, onerror); err != nil {
+			return err
+		}
+
+		if iceServer == "" {
+			features, err := alice.api.Features()
+			if err != nil {
+				return err
+			}
+			iceServer = features.ICEServers[0].Urls
+		}
 
 		peerConnection, err := s.webRtcConnect(alice, bob.contact.Jid.JID(), iceServer, alice.Name)
 		if err != nil {
