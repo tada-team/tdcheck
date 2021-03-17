@@ -38,6 +38,15 @@ type onlinersChecker struct {
 	calls     int
 }
 
+func (p *onlinersChecker) Report(w http.ResponseWriter) {
+	if p.Enabled() {
+		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", p.Host, p.onliners))
+		_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", p.Host, p.calls))
+	}
+}
+
 func (p *onlinersChecker) doCheck() error {
 	start := time.Now()
 
@@ -63,13 +72,4 @@ func (p *onlinersChecker) doCheck() error {
 	log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), p.onliners, p.calls)
 
 	return nil
-}
-
-func (p *onlinersChecker) Report(w http.ResponseWriter) {
-	if p.Enabled() {
-		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", p.Host, p.onliners))
-		_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", p.Host, p.calls))
-	}
 }

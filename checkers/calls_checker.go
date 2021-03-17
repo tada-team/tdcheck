@@ -29,6 +29,13 @@ type callsChecker struct {
 	numTimeouts int
 }
 
+func (p *callsChecker) Report(w http.ResponseWriter) {
+	if p.Enabled() {
+		_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))
+	}
+}
+
 func (p *callsChecker) doCheck() error {
 	if p.bobJid.Empty() || p.iceServer == "" {
 		contact, err := p.bobSession.Me(p.Team)
@@ -89,13 +96,6 @@ func (p *callsChecker) doCheck() error {
 	log.Printf("[%s] %s: %s OK", p.Host, p.Name, p.duration.Round(time.Millisecond))
 
 	return nil
-}
-
-func (p *callsChecker) Report(w http.ResponseWriter) {
-	if p.Enabled() {
-		_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))
-	}
 }
 
 func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnection, offer webrtc.SessionDescription, outputTrack *webrtc.Track, err error) {

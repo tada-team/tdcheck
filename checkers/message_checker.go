@@ -32,6 +32,16 @@ type messageChecker struct {
 	numTimeouts int
 }
 
+func (p *messageChecker) Report(w http.ResponseWriter) {
+	if p.Enabled() {
+		_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, p.echoMessageDuration.Milliseconds()))
+
+		_, _ = io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", p.Host, p.checkMessageDuration.Milliseconds()))
+	}
+}
+
 func (p *messageChecker) doCheck() error {
 	if p.bobJid.Empty() {
 		contact, err := p.bobSession.Me(p.Team)
@@ -105,14 +115,4 @@ func (p *messageChecker) doCheck() error {
 	p.aliceWsSession.DeleteMessage(messageId)
 
 	return nil
-}
-
-func (p *messageChecker) Report(w http.ResponseWriter) {
-	if p.Enabled() {
-		_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, p.echoMessageDuration.Milliseconds()))
-
-		_, _ = io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", p.Host, p.checkMessageDuration.Milliseconds()))
-	}
 }
