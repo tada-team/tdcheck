@@ -12,14 +12,6 @@ import (
 )
 
 func main() {
-	//go func() {
-	//	fdpath := fmt.Sprintf("/proc/%d/fd", os.Getpid())
-	//	for range time.NewTicker(time.Second).C {
-	//		files, _ := ioutil.ReadDir(fdpath)
-	//		log.Println("open files:", len(files))
-	//	}
-	//}()
-
 	configPathPtr := flag.String("config", "/etc/tdcheck/default.yml", "path to config")
 	flag.Parse()
 

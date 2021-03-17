@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -28,16 +27,37 @@ const (
 var maxTimeoutsReached = errors.New("max timeouts")
 
 func ServerWatch(s Server, rtr *mux.Router) {
-	apiPing := checkers.NewUrlChecker(s.Host, "tdcheck_api_ping_ms", s.GetHost()+"/api/v4/ping", s.ApiPingInterval)
+	var apiPing checkers.UrlChecker
+	apiPing.Host = s.Host
+	apiPing.Name = "tdcheck_api_ping_ms"
+	apiPing.Path = "/api/v4/ping"
+	apiPing.Interval = s.ApiPingInterval
 	go apiPing.Start()
 
-	nginxPing := checkers.NewUrlChecker(s.Host, "tdcheck_nginx_ping_ms", s.GetHost()+"/ping.txt", s.NginxPingInterval)
+	var nginxPing checkers.UrlChecker
+	nginxPing.Host = s.Host
+	nginxPing.Name = "tdcheck_nginx_ping_ms"
+	nginxPing.Path = "/ping.txt"
+	nginxPing.Interval = s.NginxPingInterval
 	go nginxPing.Start()
 
-	userverPing := checkers.NewUrlChecker(s.Host, "tdcheck_userver_ping_ms", s.GetHost()+s.UServerPingPath, s.UServerPingInterval)
+	var userverPing checkers.UrlChecker
+	userverPing.Host = s.Host
+	userverPing.Name = "tdcheck_userver_ping_ms"
+	userverPing.Path = s.UServerPingPath
+	userverPing.Interval = s.UServerPingInterval
 	go userverPing.Start()
 
-	go s.wsPing()
+	wsPing := checkers.NewWsPingChecker()
+	wsPing.Host = s.Host
+	wsPing.Name = "tdcheck_ws_ping_ms"
+	wsPing.Interval = s.WsPingInterval
+	wsPing.Team = s.TestTeam
+	wsPing.AliceToken = s.AliceToken
+	wsPing.BobToken = s.BobToken
+	wsPing.Verbose = s.Verbose
+	go wsPing.Start()
+
 	go s.checkMessage()
 	go s.checkOnliners()
 	go s.checkCall()
@@ -49,7 +69,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		"| api:", apiPing.Enabled(),
 		"| nginx:", nginxPing.Enabled(),
 		"| userver:", userverPing.Enabled(),
-		"| ws ping:", s.wsPingEnabled(),
+		"| ws ping:", wsPing.Enabled(),
 		"| message:", s.checkMessageEnabled(),
 		"| calls:", s.checkCallEnabled(),
 		"| onliners:", s.checkOnlinersEnabled(),
@@ -61,11 +81,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		apiPing.Report(w)
 		nginxPing.Report(w)
 		userverPing.Report(w)
-
-		if s.wsPingEnabled() {
-			_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
-			_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", s.Host, s.wsPingDuration.Milliseconds()))
-		}
+		wsPing.Report(w)
 
 		if s.checkOnlinersEnabled() {
 			_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
@@ -125,16 +141,8 @@ type Server struct {
 	callsFails           int
 }
 
-func (s *Server) GetHost() string {
-	url := s.Host
-	if !strings.HasPrefix(url, "http") {
-		url = "https://" + url
-	}
-	return url
-}
-
 func (s *Server) tdClient(token string, timeout time.Duration) (*tdclient.Session, error) {
-	sess, err := tdclient.NewSession(s.GetHost())
+	sess, err := tdclient.NewSession(checkers.ForceScheme(s.Host))
 	if err != nil {
 		return nil, err
 	}
@@ -153,9 +161,9 @@ func (s *Server) checkOnlinersEnabled() bool {
 	return s.MaxServerOnlineInterval > 0
 }
 
-func (s *Server) wsPingEnabled() bool {
-	return s.WsPingInterval > 0 && s.TestTeam != "" && s.AliceToken != ""
-}
+//func (s *Server) wsPingEnabled() bool {
+//	return s.WsPingInterval > 0 && s.TestTeam != "" && s.AliceToken != ""
+//}
 
 func (s *Server) checkMessageEnabled() bool {
 	return s.CheckMessageInterval > 0 && s.TestTeam != "" && s.AliceToken != "" && s.BobToken != ""
@@ -446,76 +454,6 @@ func (s *Server) doCheckCall(alice, bob *Client) error {
 			return err
 		}
 	}
-
-	return <-errChan
-}
-
-func (s *Server) wsPing() {
-	if s.wsPingEnabled() {
-		for {
-			if err := s.doWsPing(); err != nil {
-				s.wsFails++
-				s.wsPingDuration = s.WsPingInterval
-				log.Printf("%s ws ping: fatal #%d, %s", s, s.wsFails, err)
-				time.Sleep(retryInterval)
-			}
-		}
-	}
-}
-
-func (s *Server) doWsPing() error {
-	errChan := make(chan error)
-
-	numTimeouts := 0
-	go func() {
-		var err error
-		var aliceClient *tdclient.Session
-		var aliceWs *tdclient.WsSession
-
-		interval := s.WsPingInterval
-		for range time.Tick(interval) {
-			if aliceClient == nil {
-				aliceClient, err = s.tdClient(s.AliceToken, interval)
-				if err != nil {
-					errChan <- err
-					return
-				}
-			}
-
-			if aliceWs == nil {
-				aliceWs, err = aliceClient.Ws(s.TestTeam, func(err error) { errChan <- err })
-				if err != nil {
-					errChan <- err
-					return
-				}
-			}
-
-			start := time.Now()
-			uid := aliceWs.Ping()
-			log.Printf("%s ws ping: alice send ping %s", s, uid)
-			for time.Since(start) < interval {
-				confirmId, err := aliceWs.WaitForConfirm()
-				s.wsPingDuration = time.Since(start)
-				if err == tdclient.Timeout {
-					log.Printf("%s ws ping: alice got ping timeout on %s", s, uid)
-					numTimeouts++
-					if numTimeouts > maxTimeouts {
-						errChan <- maxTimeoutsReached
-						return
-					}
-					break
-				}
-				if err != nil {
-					errChan <- err
-					return
-				}
-				if confirmId == uid {
-					log.Printf("%s ws ping: %s OK", s, s.wsPingDuration.Truncate(time.Millisecond))
-					break
-				}
-			}
-		}
-	}()
 
 	return <-errChan
 }
