@@ -9,7 +9,10 @@ import (
 	"github.com/tada-team/tdclient"
 )
 
-const retryInterval = time.Second
+const (
+	retryInterval = time.Second
+	maxTimeouts   = 10
+)
 
 type Checker interface {
 	Enabled() bool
