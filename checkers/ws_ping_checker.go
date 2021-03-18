@@ -12,7 +12,7 @@ import (
 func NewWsPingChecker() *wsPingChecker {
 	p := new(wsPingChecker)
 	p.do = p.doCheck
-	p.Name = "tdcheck_ws_ping_ms"
+	p.Name = "ws_ping_checker"
 	return p
 }
 

@@ -14,7 +14,7 @@ import (
 func NewMessageChecker() *messageChecker {
 	p := new(messageChecker)
 	p.do = p.doCheck
-	p.Name = "tdcheck_message"
+	p.Name = "message_checker"
 	p.maxTimeouts = 100
 	return p
 }

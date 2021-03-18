@@ -15,7 +15,7 @@ import (
 func NewCallsChecker() *callsChecker {
 	p := new(callsChecker)
 	p.do = p.doCheck
-	p.Name = "tdcheck_calls"
+	p.Name = "calls_checker"
 	return p
 }
 

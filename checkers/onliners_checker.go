@@ -13,7 +13,7 @@ import (
 func NewOnlinersChecker() *onlinersChecker {
 	p := new(onlinersChecker)
 	p.do = p.doCheck
-	p.Name = "check_onliners"
+	p.Name = "onliners_checker"
 
 	go func() {
 		for range time.Tick(time.Second) {
