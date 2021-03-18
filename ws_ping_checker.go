@@ -49,6 +49,8 @@ func (p *wsPingChecker) doCheck() error {
 		if confirmId == v {
 			p.duration = time.Since(start)
 			log.Printf("[%s] %s: got %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
+		} else {
+			log.Printf("[%s] %s: invalid %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
 		}
 		break
 	}
