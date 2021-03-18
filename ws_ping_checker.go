@@ -31,20 +31,24 @@ func (p *wsPingChecker) Report(w io.Writer) {
 func (p *wsPingChecker) doCheck() error {
 	start := time.Now()
 
-	uid := p.aliceWsSession.Ping()
-	log.Printf("[%s] %s: send %s", p.Host, p.Name, uid)
+	v := p.aliceWsSession.Ping()
+	log.Printf("[%s] %s: send %s", p.Host, p.Name, v)
 	p.duration = p.Interval
 
-	for time.Since(start) < p.Interval && p.aliceWsSession != nil {
+	for time.Since(start) < p.Interval {
+		if p.aliceWsSession == nil { // reset
+			return nil
+		}
 		confirmId, err := p.aliceWsSession.WaitForConfirm()
 		if err == tdclient.Timeout {
+			log.Printf("[%s] %s: time out %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
 			continue
 		} else if err != nil {
 			return err
 		}
-		if confirmId == uid {
+		if confirmId == v {
 			p.duration = time.Since(start)
-			log.Printf("[%s] %s: got in %s", p.Host, p.Name, p.duration.Round(time.Millisecond))
+			log.Printf("[%s] %s: got %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
 		}
 		break
 	}
