@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
 	configPathPtr := flag.String("config", "/etc/tdcheck/default.yml", "path to config")
 	flag.Parse()
 
