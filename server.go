@@ -10,15 +10,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const (
-	wsFailsCheck = time.Minute
-	maxWsFails   = 120
-)
+const maxWsFails = 120
 
 func ServerWatch(s Server, rtr *mux.Router) {
 	var wsFails int
 	go func() {
-		for range time.Tick(wsFailsCheck) {
+		for range time.Tick(time.Minute) {
 			if wsFails > maxWsFails {
 				log.Panicln("too many ws fails:", wsFails)
 			}
@@ -95,8 +92,13 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
 
+		n := wsFails
+		if n == 1 { // XXX:
+			n = 0
+		}
+
 		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, wsFails))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, n))
 
 		for _, checker := range checkers {
 			checker.Report(w)
