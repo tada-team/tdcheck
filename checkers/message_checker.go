@@ -55,7 +55,7 @@ func (p *messageChecker) doCheck() error {
 
 	text := kozma.Say()
 	messageId := p.aliceWsSession.SendPlainMessage(p.bobJid, text)
-	log.Printf("[%s] %s: alice send %s (uid: %s)", p.Host, p.Name, text, messageId)
+	log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.Host, p.Name, text, messageId)
 
 	for time.Since(start) < p.Interval {
 		msg, delayed, err := p.aliceWsSession.WaitForMessage()
