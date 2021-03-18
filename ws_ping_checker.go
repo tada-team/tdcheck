@@ -33,19 +33,18 @@ func (p *wsPingChecker) doCheck() error {
 
 	uid := p.aliceWsSession.Ping()
 	log.Printf("[%s] %s: send %s", p.Host, p.Name, uid)
+	p.duration = p.Interval
+
 	for time.Since(start) < p.Interval && p.aliceWsSession != nil {
 		confirmId, err := p.aliceWsSession.WaitForConfirm()
 		if err == tdclient.Timeout {
 			continue
 		} else if err != nil {
-			p.duration = p.Interval
 			return err
 		}
 		if confirmId == uid {
 			p.duration = time.Since(start)
 			log.Printf("[%s] %s: got in %s", p.Host, p.Name, p.duration.Round(time.Millisecond))
-		} else {
-			p.duration = p.Interval
 		}
 		break
 	}
