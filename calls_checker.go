@@ -71,14 +71,20 @@ func (p *callsChecker) doCheck() error {
 		log.Printf("[%s] %s: connection closed (%s).", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 	}()
 
-	answer, err := p.aliceWsSession.SendCallOffer(p.bobJid, offer.SDP)
-	if err != nil {
-		p.duration = p.Interval
-		return errors.Wrap(err, "SendCallOffer fail")
-	}
-	log.Printf("[%s] %s: peer answer sent (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
+	p.aliceWsSession.SendCallOffer(p.bobJid, offer.SDP)
+	log.Printf("[%s] %s: call offer sent (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
-	if err := peerConnection.SetRemoteDescription(answer); err != nil {
+	callAnswer := new(tdproto.ServerCallAnswer)
+	if err := p.aliceWsSession.WaitFor(callAnswer); err != nil {
+		p.duration = p.Interval
+		return errors.Wrap(err, "ServerCallAnswer timeout")
+	}
+	log.Printf("[%s] %s: got call answer (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
+
+	if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{
+		Type: webrtc.SDPTypeAnswer,
+		SDP:  callAnswer.Params.JSEP.SDP,
+	}); err != nil {
 		p.duration = p.Interval
 		return errors.Wrap(err, "SetRemoteDescription fail")
 	}
@@ -88,10 +94,16 @@ func (p *callsChecker) doCheck() error {
 		p.duration = p.Interval
 		return err
 	}
-	log.Printf("[%s] %s: call leaved (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
+	log.Printf("[%s] %s: call leave sent (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
+
+	serverLeaveAnswer := new(tdproto.ServerCallLeave)
+	if err := p.aliceWsSession.WaitFor(serverLeaveAnswer); err != nil {
+		return err
+	}
+	log.Printf("[%s] %s: got server call leave (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
 	p.duration = time.Since(start)
-	log.Printf("[%s] %s: %s OK", p.Host, p.Name, p.duration.Round(time.Millisecond))
+	log.Printf("[%s] %s: ok (%s)", p.Host, p.Name, p.duration.Round(time.Millisecond))
 
 	return nil
 }
