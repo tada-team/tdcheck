@@ -90,10 +90,7 @@ func (p *callsChecker) doCheck() error {
 	}
 	log.Printf("[%s] %s: set remote description (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
-	if err := p.aliceWsSession.SendCallLeave(p.bobJid); err != nil {
-		p.duration = p.Interval
-		return err
-	}
+	p.aliceWsSession.SendCallLeave(p.bobJid)
 	log.Printf("[%s] %s: call leave sent (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
 	serverLeaveAnswer := new(tdproto.ServerCallLeave)
