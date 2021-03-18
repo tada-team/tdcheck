@@ -93,9 +93,9 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
 
 		n := wsFails
-		if n == 1 { // XXX:
-			n = 0
-		}
+		//if n == 1 { // XXX:
+		//	n = 0
+		//}
 
 		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, n))
