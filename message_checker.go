@@ -15,7 +15,6 @@ func NewMessageChecker() *messageChecker {
 	p := new(messageChecker)
 	p.do = p.doCheck
 	p.Name = "message_checker"
-	p.maxTimeouts = 100
 	return p
 }
 
@@ -26,9 +25,6 @@ type messageChecker struct {
 	checkMessageDuration time.Duration
 
 	bobJid tdproto.JID
-
-	maxTimeouts int
-	numTimeouts int
 }
 
 func (p *messageChecker) Report(w io.Writer) {
@@ -60,13 +56,9 @@ func (p *messageChecker) doCheck() error {
 		msg, delayed, err := p.aliceWsSession.WaitForMessage()
 		if err == tdclient.Timeout {
 			log.Printf("[%s] %s: alice got timeout on `%s`", p.Host, p.Name, text)
-			p.numTimeouts++
-			if p.numTimeouts > p.maxTimeouts {
-				p.echoMessageDuration = p.Interval
-				p.checkMessageDuration = p.Interval
-				return err
-			}
-			break
+			p.echoMessageDuration = p.Interval
+			p.checkMessageDuration = p.Interval
+			continue
 		} else if err != nil {
 			p.echoMessageDuration = p.Interval
 			p.checkMessageDuration = p.Interval
@@ -85,7 +77,7 @@ func (p *messageChecker) doCheck() error {
 		}
 	}
 
-	if p.echoMessageDuration == p.Interval{
+	if p.echoMessageDuration == p.Interval {
 		p.checkMessageDuration = p.Interval
 		return nil
 	}
@@ -94,12 +86,8 @@ func (p *messageChecker) doCheck() error {
 		msg, delayed, err := p.bobWsSession.WaitForMessage()
 		if err == tdclient.Timeout {
 			log.Printf("[%s] %s: bob got timeout on `%s`", p.Host, p.Name, text)
-			p.numTimeouts++
-			if p.numTimeouts > p.maxTimeouts {
-				p.checkMessageDuration = p.Interval
-				return err
-			}
-			break
+			p.checkMessageDuration = p.Interval
+			continue
 		} else if err != nil {
 			p.checkMessageDuration = p.Interval
 			return err

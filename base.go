@@ -125,7 +125,7 @@ func (p *BaseUserChecker) auth(token string, onfail func(error)) (*tdclient.Sess
 		panic("empty interval")
 	}
 
-	session.Timeout = p.Interval
+	//session.Timeout = p.Interval
 	session.SetVerbose(p.Verbose)
 	session.SetToken(token)
 
