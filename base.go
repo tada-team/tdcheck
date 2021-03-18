@@ -9,11 +9,6 @@ import (
 	"github.com/tada-team/tdclient"
 )
 
-const (
-	retryInterval = time.Second
-	maxTimeouts   = 10
-)
-
 type Checker interface {
 	Enabled() bool
 	Start()
@@ -67,18 +62,35 @@ func (p *BaseUserChecker) Start() {
 		if err == nil {
 			return
 		}
+
 		*p.Fails++
+
 		log.Printf("[%s] %s: fatal #%d, %s", p.Host, p.Name, *p.Fails, err)
-		time.Sleep(retryInterval)
+		time.Sleep(3*time.Second)
+
+		if p.aliceWsSession != nil {
+			log.Printf("[%s] %s: reset alice session", p.Host, p.Name)
+			if err := p.aliceWsSession.Close(); err != nil {
+				log.Printf("[%s] %s: close alice session fail: %s", p.Host, p.Name, err)
+			}
+			p.aliceSession, p.aliceWsSession = nil, nil
+		}
+
+		if p.bobWsSession != nil {
+			log.Printf("[%s] %s: reset bob session", p.Host, p.Name)
+			if err := p.bobWsSession.Close(); err != nil {
+				log.Printf("[%s] %s: close bob session fail: %s", p.Host, p.Name, err)
+			}
+			p.bobSession, p.bobWsSession = nil, nil
+		}
 	}
 
 	var err error
 	for {
 		if p.AliceToken != "" && (p.aliceSession == nil || p.aliceWsSession == nil) {
+			log.Printf("[%s] %s: (re)create alice session", p.Host, p.Name)
 			p.aliceSession, p.aliceWsSession, err = p.auth(p.AliceToken, func(err error) {
 				onfail(err)
-				log.Printf("[%s] %s: reset alice session", p.Host, p.Name)
-				p.aliceSession, p.aliceWsSession = nil, nil
 			})
 			if err != nil {
 				onfail(err)
@@ -87,11 +99,10 @@ func (p *BaseUserChecker) Start() {
 		}
 
 		if p.BobToken != "" && (p.bobSession == nil || p.bobWsSession == nil) {
+			log.Printf("[%s] %s: (re)create bob session", p.Host, p.Name)
 			p.bobSession, p.bobWsSession, err = p.auth(p.BobToken, onfail)
 			if err != nil {
 				onfail(err)
-				log.Printf("[%s] %s: reset bob session", p.Host, p.Name)
-				p.bobSession, p.bobWsSession = nil, nil
 				continue
 			}
 		}

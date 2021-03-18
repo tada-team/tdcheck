@@ -109,7 +109,7 @@ func (p *messageChecker) doCheck() error {
 			continue
 		}
 
-		log.Printf("[%s] %s: bob got %s: `%s` (gentime: %v)", p.Host, p.Name, msg.MessageId, msg.PushText, msg.Gentime)
+		log.Printf("[%s] %s: bob got `%s` (gentime: %v)", p.Host, p.Name, msg.PushText, msg.Gentime)
 		if msg.MessageId == messageId {
 			log.Printf("[%s] %s: delivery ok (%s)", p.Host, p.Name, p.checkMessageDuration.Round(time.Millisecond))
 			p.checkMessageDuration = time.Since(start)

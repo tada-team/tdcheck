@@ -149,7 +149,7 @@ func (p *callsChecker) newPeerConnection() (*webrtc.PeerConnection, *webrtc.Sess
 
 	// write output if program "hear" something
 	peerConnection.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		log.Printf("[%s] %s got new track, id: %v\n", p.Host, p.Name, track.ID())
+		log.Printf("[%s] %s: got new track, id: %v\n", p.Host, p.Name, track.ID())
 	})
 
 	return peerConnection, &offer, outputTrack, nil
