@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	wsFailsCheck  = time.Minute
-	maxWsFails    = 120
+	wsFailsCheck = time.Minute
+	maxWsFails   = 120
 )
 
 func ServerWatch(s Server, rtr *mux.Router) {
@@ -49,6 +49,13 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	userverPing.Path = s.UServerPingPath
 	userverPing.Interval = s.UServerPingInterval
 	go userverPing.Start()
+
+	var adminPing checkers.UrlChecker
+	adminPing.Host = s.Host
+	adminPing.Name = "tdcheck_admin_ping_ms"
+	adminPing.Path = "/admin/"
+	adminPing.Interval = s.AdminPingInterval
+	go adminPing.Start()
 
 	wsPing := checkers.NewWsPingChecker()
 	wsPing.Host = s.Host
@@ -94,6 +101,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		"| api:", apiPing.Enabled(),
 		"| nginx:", nginxPing.Enabled(),
 		"| userver:", userverPing.Enabled(),
+		"| admin:", adminPing.Enabled(),
 		"| ws ping:", wsPing.Enabled(),
 		"| message:", checkCalls.Enabled(),
 		"| calls:", checkCalls.Enabled(),
@@ -130,7 +138,7 @@ type Server struct {
 	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
 	CheckMessageInterval    time.Duration `yaml:"check_message_interval"`
 	CheckCallInterval       time.Duration `yaml:"check_call_interval"`
-
-	UServerPingInterval time.Duration `yaml:"userver_ping_interval"`
-	UServerPingPath     string        `yaml:"userver_ping_path"`
+	AdminPingInterval       time.Duration `yaml:"admin_ping_interval"`
+	UServerPingInterval     time.Duration `yaml:"userver_ping_interval"`
+	UServerPingPath         string        `yaml:"userver_ping_path"`
 }
