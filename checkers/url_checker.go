@@ -22,6 +22,15 @@ type UrlChecker struct {
 	client   http.Client
 }
 
+func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker {
+	return &UrlChecker{
+		Host:     host,
+		Name:     name,
+		Path:     path,
+		Interval: interval,
+	}
+}
+
 func (p *UrlChecker) Enabled() bool { return p.Interval > 0 && p.Path != "" }
 
 func (p *UrlChecker) Report(w http.ResponseWriter) {

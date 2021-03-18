@@ -29,32 +29,16 @@ func ServerWatch(s Server, rtr *mux.Router) {
 		}
 	}()
 
-	var apiPing checkers.UrlChecker
-	apiPing.Host = s.Host
-	apiPing.Name = "tdcheck_api_ping_ms"
-	apiPing.Path = "/api/v4/ping"
-	apiPing.Interval = s.ApiPingInterval
+	apiPing := checkers.NewUrlChecker(s.Host, "tdcheck_api_ping_ms", "/api/v4/ping", s.ApiPingInterval)
 	go apiPing.Start()
 
-	var nginxPing checkers.UrlChecker
-	nginxPing.Host = s.Host
-	nginxPing.Name = "tdcheck_nginx_ping_ms"
-	nginxPing.Path = "/ping.txt"
-	nginxPing.Interval = s.NginxPingInterval
+	nginxPing := checkers.NewUrlChecker(s.Host, "tdcheck_nginx_ping_ms", "/ping.txt", s.NginxPingInterval)
 	go nginxPing.Start()
 
-	var userverPing checkers.UrlChecker
-	userverPing.Host = s.Host
-	userverPing.Name = "tdcheck_userver_ping_ms"
-	userverPing.Path = s.UServerPingPath
-	userverPing.Interval = s.UServerPingInterval
+	userverPing := checkers.NewUrlChecker(s.Host, "tdcheck_userver_ping_ms", s.UServerPingPath, s.UServerPingInterval)
 	go userverPing.Start()
 
-	var adminPing checkers.UrlChecker
-	adminPing.Host = s.Host
-	adminPing.Name = "tdcheck_admin_ping_ms"
-	adminPing.Path = "/admin/"
-	adminPing.Interval = s.AdminPingInterval
+	adminPing := checkers.NewUrlChecker(s.Host, "tdcheck_admin_ping_ms", "/admin/", s.AdminPingInterval)
 	go adminPing.Start()
 
 	wsPing := checkers.NewWsPingChecker()
