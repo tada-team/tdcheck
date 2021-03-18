@@ -50,7 +50,7 @@ func (p *onlinersChecker) Report(w io.Writer) {
 func (p *onlinersChecker) doCheck() error {
 	start := time.Now()
 
-	for time.Since(start) < p.Interval {
+	for time.Since(start) < p.Interval && p.aliceWsSession != nil {
 		ev := new(tdproto.ServerOnline)
 		if err := p.aliceWsSession.WaitFor(ev); err == tdclient.Timeout {
 			continue
