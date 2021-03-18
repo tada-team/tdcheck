@@ -118,7 +118,7 @@ func (p *messageChecker) doCheck() error {
 		}
 	}
 
-	log.Printf("[%s] %s: alice drop %s", p.Host, p.Name, text)
+	log.Printf("[%s] %s: alice drop `%s`", p.Host, p.Name, text)
 	p.aliceWsSession.DeleteMessage(messageId)
 
 	return nil
