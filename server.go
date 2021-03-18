@@ -85,8 +85,10 @@ func ServerWatch(s Server, rtr *mux.Router) {
 
 	for _, checker := range checkers {
 		if checker.Enabled() {
-			checker.Start()
-			log.Println("start:", checker.GetName())
+			go checker.Start()
+			log.Println( checker.GetName(), "started")
+		} else {
+			log.Println(checker.GetName(), "disabled")
 		}
 	}
 
