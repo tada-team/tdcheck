@@ -93,7 +93,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[%s] request", s.Host)
+		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
 
 		apiPing.Report(w)
 		nginxPing.Report(w)
