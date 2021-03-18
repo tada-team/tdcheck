@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/tada-team/tdclient"
 )
 
@@ -18,7 +19,7 @@ type Checker interface {
 
 func ForceScheme(url string) string {
 	if !strings.HasPrefix(url, "http") {
-		url = "https://" + url
+		return "https://" + url
 	}
 	return url
 }
@@ -65,13 +66,13 @@ func (p *BaseUserChecker) Start() {
 
 		*p.Fails++
 
-		log.Printf("[%s] %s: fatal #%d, %s", p.Host, p.Name, *p.Fails, err)
+		log.Printf("[%s] %s: fail #%d, %s", p.Host, p.Name, *p.Fails, err)
 		time.Sleep(3*time.Second)
 
 		if p.aliceWsSession != nil {
 			log.Printf("[%s] %s: reset alice session", p.Host, p.Name)
 			if err := p.aliceWsSession.Close(); err != nil {
-				log.Printf("[%s] %s: close alice session fail: %s", p.Host, p.Name, err)
+				log.Printf("[%s] %s: warn: close alice session fail: %s", p.Host, p.Name, err)
 			}
 			p.aliceSession, p.aliceWsSession = nil, nil
 		}
@@ -79,7 +80,7 @@ func (p *BaseUserChecker) Start() {
 		if p.bobWsSession != nil {
 			log.Printf("[%s] %s: reset bob session", p.Host, p.Name)
 			if err := p.bobWsSession.Close(); err != nil {
-				log.Printf("[%s] %s: close bob session fail: %s", p.Host, p.Name, err)
+				log.Printf("[%s] %s: warn: close bob session fail: %s", p.Host, p.Name, err)
 			}
 			p.bobSession, p.bobWsSession = nil, nil
 		}
@@ -90,9 +91,10 @@ func (p *BaseUserChecker) Start() {
 		if p.AliceToken != "" && (p.aliceSession == nil || p.aliceWsSession == nil) {
 			log.Printf("[%s] %s: (re)create alice session", p.Host, p.Name)
 			p.aliceSession, p.aliceWsSession, err = p.auth(p.AliceToken, func(err error) {
-				onfail(err)
+				onfail(errors.Wrap(err, "alice ws error"))
 			})
 			if err != nil {
+				log.Printf("[%s] %s: (re)create alice session fail: %s", p.Host, p.Name, err)
 				onfail(err)
 				continue
 			}
@@ -100,14 +102,18 @@ func (p *BaseUserChecker) Start() {
 
 		if p.BobToken != "" && (p.bobSession == nil || p.bobWsSession == nil) {
 			log.Printf("[%s] %s: (re)create bob session", p.Host, p.Name)
-			p.bobSession, p.bobWsSession, err = p.auth(p.BobToken, onfail)
+			p.bobSession, p.bobWsSession, err = p.auth(p.BobToken, func(err error) {
+				onfail(errors.Wrap(err, "bob ws error"))
+			})
 			if err != nil {
+				log.Printf("[%s] %s: (re)create bob session fail: %s", p.Host, p.Name, err)
 				onfail(err)
 				continue
 			}
 		}
 
 		if err := p.do(); err != nil {
+			// log.Printf("[%s] %s: do fail: %s", p.Host, p.Name, err)
 			onfail(err)
 		}
 
@@ -116,13 +122,17 @@ func (p *BaseUserChecker) Start() {
 }
 
 func (p *BaseUserChecker) auth(token string, onfail func(error)) (*tdclient.Session, *tdclient.WsSession, error) {
-	session, err := tdclient.NewSession(ForceScheme(p.Host))
-	if err != nil {
-		return nil, nil, err
-	}
-
 	if p.Interval == 0 {
 		panic("empty interval")
+	}
+
+	session, err := tdclient.NewSession(ForceScheme(p.Host))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "new session fail")
+	}
+
+	if err := session.Ping(); err != nil {
+		return nil, nil, errors.Wrap(err, "ping fail")
 	}
 
 	//session.Timeout = p.Interval
@@ -131,8 +141,8 @@ func (p *BaseUserChecker) auth(token string, onfail func(error)) (*tdclient.Sess
 
 	wsSession, err := session.Ws(p.Team, onfail)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "ws session fail")
 	}
 
-	return &session, wsSession, err
+	return &session, wsSession, nil
 }

@@ -38,19 +38,22 @@ func (p *callsChecker) doCheck() error {
 	if p.bobJid.Empty() || p.iceServer == "" {
 		contact, err := p.bobSession.Me(p.Team)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "get me fail")
 		}
 		p.bobJid = contact.Jid
 
 		features, err := p.bobSession.Features()
 		if err != nil {
-			return err
+			return errors.Wrap(err, "get features fail")
 		}
 		p.iceServer = features.ICEServers[0].Urls
 
-		// dont need for bob ws
+		//p.bobSession.SetVerbose(true)
+		log.Printf("[%s] %s: bob: %s", p.Host, p.Name, p.bobJid)
+		log.Printf("[%s] %s: ice: %s", p.Host, p.Name, p.iceServer)
+
 		if err := p.bobWsSession.Close(); err != nil {
-			return err
+			return errors.Wrap(err, "bob close fail")
 		}
 	}
 
@@ -90,17 +93,27 @@ func (p *callsChecker) doCheck() error {
 	}
 	log.Printf("[%s] %s: set remote description (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
+	// FIXME:
+	//if err := p.bobWsSession.WaitFor(new(tdproto.ServerCallBuzz)); err != nil {
+	//	return errors.Wrap(err, "ServerCallBuzz fail")
+	//}
+
 	p.aliceWsSession.SendCallLeave(p.bobJid)
 	log.Printf("[%s] %s: call leave sent (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
 	serverLeaveAnswer := new(tdproto.ServerCallLeave)
 	if err := p.aliceWsSession.WaitFor(serverLeaveAnswer); err != nil {
-		return err
+		return errors.Wrap(err, "server leave answer fail")
 	}
 	log.Printf("[%s] %s: got server call leave (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
 	p.duration = time.Since(start)
 	log.Printf("[%s] %s: ok (%s)", p.Host, p.Name, p.duration.Round(time.Millisecond))
+
+	// FIXME:
+	//if err := p.bobWsSession.WaitFor(new(tdproto.ServerCallBuzzcancel)); err != nil {
+	//	return errors.Wrap(err, "ServerCallBuzzcancel wait fail")
+	//}
 
 	return nil
 }

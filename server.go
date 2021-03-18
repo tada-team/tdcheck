@@ -21,6 +21,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 			}
 			if wsFails > 0 {
 				wsFails--
+				log.Println("decrease fails to", wsFails)
 			}
 		}
 	}()
@@ -83,7 +84,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	for _, checker := range checkers {
 		if checker.Enabled() {
 			go checker.Start()
-			log.Println( checker.GetName(), "started")
+			log.Println(checker.GetName(), "started")
 		} else {
 			log.Println(checker.GetName(), "disabled")
 		}

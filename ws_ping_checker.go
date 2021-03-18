@@ -44,6 +44,7 @@ func (p *wsPingChecker) doCheck() error {
 			log.Printf("[%s] %s: time out %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
 			continue
 		} else if err != nil {
+			log.Printf("[%s] %s: fail %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
 			return err
 		}
 		if confirmId == v {
