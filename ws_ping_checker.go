@@ -1,4 +1,4 @@
-package checkers
+package main
 
 import (
 	"fmt"

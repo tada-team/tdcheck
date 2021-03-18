@@ -1,4 +1,4 @@
-package checkers
+package main
 
 import (
 	"io"
@@ -17,6 +17,7 @@ const (
 type Checker interface {
 	Enabled() bool
 	Start()
+	GetName() string
 	Report(w io.Writer)
 }
 
@@ -45,6 +46,8 @@ type BaseUserChecker struct {
 
 	do func() error // hack for inheritance
 }
+
+func (p *BaseUserChecker) GetName() string { return p.Name }
 
 func (p *BaseUserChecker) Enabled() bool { return p.Interval > 0 && p.Team != "" && p.AliceToken != "" }
 

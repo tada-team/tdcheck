@@ -1,4 +1,4 @@
-package checkers
+package main
 
 import (
 	"fmt"
@@ -96,8 +96,8 @@ func (p *callsChecker) doCheck() error {
 	return nil
 }
 
-func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnection, offer webrtc.SessionDescription, outputTrack *webrtc.Track, err error) {
-	peerConnection, err = webrtc.NewPeerConnection(webrtc.Configuration{
+func (p *callsChecker) newPeerConnection() (*webrtc.PeerConnection, *webrtc.SessionDescription, *webrtc.Track, error) {
+	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{{
 			URLs: []string{
 				p.iceServer,
@@ -105,7 +105,7 @@ func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnectio
 		}},
 	})
 	if err != nil {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
 	var mediaEngine webrtc.MediaEngine
@@ -113,29 +113,29 @@ func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnectio
 
 	audioCodecs := mediaEngine.GetCodecsByKind(webrtc.RTPCodecTypeAudio)
 	if len(audioCodecs) == 0 {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
-	outputTrack, err = peerConnection.NewTrack(audioCodecs[0].PayloadType, rand.Uint32(), "audio", "pion")
+	outputTrack, err := peerConnection.NewTrack(audioCodecs[0].PayloadType, rand.Uint32(), "audio", "pion")
 	if err != nil {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
 	if _, err := peerConnection.AddTrack(outputTrack); err != nil {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
-	offer, err = peerConnection.CreateOffer(nil)
+	offer, err := peerConnection.CreateOffer(nil)
 	if err != nil {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
 	if err := mediaEngine.PopulateFromSDP(offer); err != nil {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
 	if err := peerConnection.SetLocalDescription(offer); err != nil {
-		return nil, offer, nil, err
+		return nil, nil, nil, err
 	}
 
 	// write output if program "hear" something
@@ -143,5 +143,5 @@ func (p *callsChecker) newPeerConnection() (peerConnection *webrtc.PeerConnectio
 		log.Printf("[%s] %s got new track, id: %v\n", p.Host, p.Name, track.ID())
 	})
 
-	return peerConnection, offer, outputTrack, nil
+	return peerConnection, &offer, outputTrack, nil
 }

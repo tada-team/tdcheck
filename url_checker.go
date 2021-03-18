@@ -1,4 +1,4 @@
-package checkers
+package main
 
 import (
 	"fmt"
@@ -32,6 +32,8 @@ func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker 
 }
 
 func (p *UrlChecker) Enabled() bool { return p.Interval > 0 && p.Path != "" }
+
+func (p *UrlChecker) GetName() string { return p.Name }
 
 func (p *UrlChecker) Report(w io.Writer) {
 	if p.Enabled() {
