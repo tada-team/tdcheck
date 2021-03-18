@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
 )
 
@@ -50,26 +51,30 @@ func (p *onlinersChecker) Report(w http.ResponseWriter) {
 func (p *onlinersChecker) doCheck() error {
 	start := time.Now()
 
-	ev := new(tdproto.ServerOnline)
-	if err := p.aliceWsSession.WaitFor(ev); err != nil {
-		return err
+	for time.Since(start) < p.Interval {
+		ev := new(tdproto.ServerOnline)
+		if err := p.aliceWsSession.WaitFor(ev); err == tdclient.Timeout {
+			continue
+		} else if err != nil {
+			return err
+		}
+
+		p.lastEvent = time.Now()
+
+		if ev.Params.Contacts == nil {
+			p.onliners = 0
+		} else {
+			p.onliners = len(*ev.Params.Contacts)
+		}
+
+		if ev.Params.Calls == nil {
+			p.calls = 0
+		} else {
+			p.calls = len(*ev.Params.Calls)
+		}
+
+		log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), p.onliners, p.calls)
 	}
-
-	p.lastEvent = time.Now()
-
-	if ev.Params.Contacts == nil {
-		p.onliners = 0
-	} else {
-		p.onliners = len(*ev.Params.Contacts)
-	}
-
-	if ev.Params.Calls == nil {
-		p.calls = 0
-	} else {
-		p.calls = len(*ev.Params.Calls)
-	}
-
-	log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), p.onliners, p.calls)
 
 	return nil
 }
