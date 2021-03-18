@@ -1,8 +1,8 @@
 package checkers
 
 import (
+	"io"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 
@@ -17,7 +17,7 @@ const (
 type Checker interface {
 	Enabled() bool
 	Start()
-	Report(w http.ResponseWriter)
+	Report(w io.Writer)
 }
 
 func ForceScheme(url string) string {

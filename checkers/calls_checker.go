@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"math/rand"
-	"net/http"
 	"time"
 
 	"github.com/pion/webrtc/v2"
@@ -22,14 +21,13 @@ func NewCallsChecker() *callsChecker {
 
 type callsChecker struct {
 	BaseUserChecker
-
 	duration    time.Duration
 	bobJid      tdproto.JID
 	iceServer   string
 	numTimeouts int
 }
 
-func (p *callsChecker) Report(w http.ResponseWriter) {
+func (p *callsChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))

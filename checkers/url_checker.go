@@ -33,7 +33,7 @@ func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker 
 
 func (p *UrlChecker) Enabled() bool { return p.Interval > 0 && p.Path != "" }
 
-func (p *UrlChecker) Report(w http.ResponseWriter) {
+func (p *UrlChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, fmt.Sprintf("# TYPE %s gauge\n", p.Name))
 		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.Host, p.duration.Milliseconds()))

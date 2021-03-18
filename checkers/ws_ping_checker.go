@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"time"
+
+	"github.com/tada-team/tdclient"
 )
 
 func NewWsPingChecker() *wsPingChecker {
@@ -20,28 +21,34 @@ type wsPingChecker struct {
 	duration time.Duration
 }
 
+func (p *wsPingChecker) Report(w io.Writer) {
+	if p.Enabled() {
+		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))
+	}
+}
+
 func (p *wsPingChecker) doCheck() error {
 	start := time.Now()
 
 	uid := p.aliceWsSession.Ping()
 	log.Printf("[%s] %s: send %s", p.Host, p.Name, uid)
-	confirmId, err := p.aliceWsSession.WaitForConfirm()
-	if err != nil {
-		p.duration = p.Interval
-		return err
-	}
-
-	p.duration = time.Since(start)
-	if confirmId == uid {
-		log.Printf("[%s] %s: got in %s", p.Host, p.Name, p.duration.Round(time.Millisecond))
+	for time.Since(start) < p.Interval {
+		confirmId, err := p.aliceWsSession.WaitForConfirm()
+		if err == tdclient.Timeout {
+			continue
+		} else if err != nil {
+			p.duration = p.Interval
+			return err
+		}
+		if confirmId == uid {
+			p.duration = time.Since(start)
+			log.Printf("[%s] %s: got in %s", p.Host, p.Name, p.duration.Round(time.Millisecond))
+		} else {
+			p.duration = p.Interval
+		}
+		break
 	}
 
 	return nil
-}
-
-func (p *wsPingChecker) Report(w http.ResponseWriter) {
-	if p.Enabled() {
-		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))
-	}
 }

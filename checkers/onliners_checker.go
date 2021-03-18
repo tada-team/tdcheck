@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/tada-team/tdclient"
@@ -39,7 +38,7 @@ type onlinersChecker struct {
 	calls     int
 }
 
-func (p *onlinersChecker) Report(w http.ResponseWriter) {
+func (p *onlinersChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", p.Host, p.onliners))

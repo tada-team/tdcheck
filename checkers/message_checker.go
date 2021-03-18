@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/tada-team/kozma"
@@ -32,7 +31,7 @@ type messageChecker struct {
 	numTimeouts int
 }
 
-func (p *messageChecker) Report(w http.ResponseWriter) {
+func (p *messageChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, p.echoMessageDuration.Milliseconds()))
