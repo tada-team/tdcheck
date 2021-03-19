@@ -58,6 +58,7 @@ func (p *callsChecker) doCheck() error {
 	}
 
 	start := time.Now()
+	callDuration := 5* time.Second
 
 	peerConnection, offer, _, err := p.newPeerConnection()
 	if err != nil {
@@ -93,6 +94,8 @@ func (p *callsChecker) doCheck() error {
 	}
 	log.Printf("[%s] %s: set remote description (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
+	log.Printf("[%s] %s: sleep %s", p.Host, p.Name, callDuration.Truncate(time.Millisecond))
+	time.Sleep(callDuration)
 	// FIXME:
 	//if err := p.bobWsSession.WaitFor(new(tdproto.ServerCallBuzz)); err != nil {
 	//	return errors.Wrap(err, "ServerCallBuzz fail")
@@ -107,7 +110,7 @@ func (p *callsChecker) doCheck() error {
 	}
 	log.Printf("[%s] %s: got server call leave (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
-	p.duration = time.Since(start)
+	p.duration = time.Since(start) - callDuration
 	log.Printf("[%s] %s: ok (%s)", p.Host, p.Name, p.duration.Round(time.Millisecond))
 
 	// FIXME:
