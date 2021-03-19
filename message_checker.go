@@ -63,10 +63,12 @@ func (p *messageChecker) doCheck() error {
 	messageId := p.aliceWsSession.SendPlainMessage(p.bobJid, text)
 	log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.Host, p.Name, text, messageId)
 
+	numTimeouts := 0
 	for time.Since(start) < p.Interval && p.aliceWsSession != nil {
 		msg, delayed, err := p.aliceWsSession.WaitForMessage()
 		if err == tdclient.Timeout {
-			log.Printf("[%s] %s: alice got timeout on `%s`", p.Host, p.Name, text)
+			numTimeouts++
+			log.Printf("[%s] %s: alice timeout #%d on `%s`", p.Host, p.Name, numTimeouts, text)
 			continue
 		} else if err != nil {
 			return err
@@ -83,10 +85,12 @@ func (p *messageChecker) doCheck() error {
 	}
 
 	if p.echoMessageDuration > 0 {
+		numTimeouts := 0
 		for time.Since(start) < p.Interval && p.bobWsSession != nil {
 			msg, delayed, err := p.bobWsSession.WaitForMessage()
 			if err == tdclient.Timeout {
-				log.Printf("[%s] %s: bob got timeout on `%s`", p.Host, p.Name, text)
+				numTimeouts++
+				log.Printf("[%s] %s: bob timeout #%d on `%s`", p.Host, p.Name, numTimeouts, text)
 				continue
 			} else if err != nil {
 				return err
@@ -104,8 +108,10 @@ func (p *messageChecker) doCheck() error {
 		}
 	}
 
-	log.Printf("[%s] %s: alice drop `%s`", p.Host, p.Name, text)
-	p.aliceWsSession.DeleteMessage(messageId)
+	if p.aliceWsSession != nil {
+		log.Printf("[%s] %s: alice drop `%s`", p.Host, p.Name, text)
+		p.aliceWsSession.DeleteMessage(messageId)
+	}
 
 	return nil
 }

@@ -45,7 +45,8 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	wsPing.Fails = &wsFails
 	wsPing.Interval = s.WsPingInterval
 	wsPing.Team = s.TestTeam
-	wsPing.AliceToken = s.AliceToken
+	//wsPing.AliceToken = s.AliceToken
+	wsPing.AliceToken = s.BobToken
 	wsPing.Verbose = s.Verbose
 	checkers = append(checkers, wsPing)
 
