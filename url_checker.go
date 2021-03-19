@@ -47,16 +47,18 @@ func (p *UrlChecker) Start() {
 		return
 	}
 
-	p.client.Timeout = p.Interval
-
 	ticker := time.NewTicker(p.Interval)
 	defer ticker.Stop()
 
 	for {
 		start := time.Now()
 		content, err := p.checkContent()
-		if err != nil || len(content) == 0 {
+		if err != nil {
 			log.Printf("[%s] %s: %s fail: %v", p.Host, p.Name, p.duration.Round(time.Millisecond), err)
+			p.duration = p.Interval
+			continue
+		} else if len(content) == 0 {
+			log.Printf("[%s] %s: %s empty content", p.Host, p.Name, p.duration.Round(time.Millisecond))
 			p.duration = p.Interval
 			continue
 		}
