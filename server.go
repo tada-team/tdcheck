@@ -74,8 +74,8 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	checkCalls.Fails = &wsFails
 	checkCalls.Interval = s.CheckCallInterval
 	checkCalls.Team = s.TestTeam
-	checkCalls.AliceToken = s.BobToken
-	checkCalls.BobToken = s.AliceToken
+	checkCalls.AliceToken = s.AliceToken
+	checkCalls.BobToken = s.BobToken
 	checkCalls.Verbose = s.Verbose
 	checkers = append(checkers, checkCalls)
 
