@@ -34,7 +34,7 @@ func main() {
 
 	rtr := mux.NewRouter()
 	for _, s := range config.Servers {
-		ServerWatch(s, rtr)
+		s.Watch(rtr)
 	}
 
 	srv := http.NewServeMux()

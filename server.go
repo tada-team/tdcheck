@@ -10,21 +10,32 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const maxWsFails = 120
+type Server struct {
+	Host string `yaml:"host"`
 
-func ServerWatch(s Server, rtr *mux.Router) {
-	var wsFails int
-	go func() {
-		for range time.Tick(time.Minute) {
-			if wsFails > maxWsFails {
-				log.Panicln("too many ws fails:", wsFails)
-			}
-			if wsFails > 0 {
-				wsFails--
-				log.Println("decrease fails to", wsFails)
-			}
-		}
-	}()
+	TestTeam   string `yaml:"test_team"`
+	AliceToken string `yaml:"alice_token"`
+	BobToken   string `yaml:"bob_token"`
+	Verbose    bool   `yaml:"verbose"`
+	MaxWsFails int    `yaml:"max_ws_fails"`
+
+	ApiPingInterval         time.Duration `yaml:"api_ping_interval"`
+	NginxPingInterval       time.Duration `yaml:"nginx_ping_interval"`
+	WsPingInterval          time.Duration `yaml:"ws_ping_interval"`
+	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
+	CheckMessageInterval    time.Duration `yaml:"check_message_interval"`
+	CheckCallInterval       time.Duration `yaml:"check_call_interval"`
+	AdminPingInterval       time.Duration `yaml:"admin_ping_interval"`
+	UServerPingInterval     time.Duration `yaml:"userver_ping_interval"`
+	UServerPingPath         string        `yaml:"userver_ping_path"`
+
+	wsFails int
+}
+
+func (s *Server) Watch(rtr *mux.Router) {
+	if s.MaxWsFails == 0 {
+		s.MaxWsFails = 10
+	}
 
 	var checkers []Checker
 
@@ -42,17 +53,17 @@ func ServerWatch(s Server, rtr *mux.Router) {
 
 	wsPing := NewWsPingChecker()
 	wsPing.Host = s.Host
-	wsPing.Fails = &wsFails
+	wsPing.Fails = s.wsFails
 	wsPing.Interval = s.WsPingInterval
 	wsPing.Team = s.TestTeam
-	//wsPing.AliceToken = s.AliceToken
-	wsPing.AliceToken = s.BobToken
+	wsPing.AliceToken = s.AliceToken
+	wsPing.BobToken = s.BobToken
 	wsPing.Verbose = s.Verbose
 	checkers = append(checkers, wsPing)
 
 	checkOnliners := NewOnlinersChecker()
 	checkOnliners.Host = s.Host
-	checkOnliners.Fails = &wsFails
+	checkOnliners.Fails = s.wsFails
 	checkOnliners.Interval = s.MaxServerOnlineInterval
 	checkOnliners.Team = s.TestTeam
 	checkOnliners.AliceToken = s.AliceToken
@@ -61,7 +72,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 
 	checkMessage := NewMessageChecker()
 	checkMessage.Host = s.Host
-	checkMessage.Fails = &wsFails
+	checkMessage.Fails = s.wsFails
 	checkMessage.Interval = s.CheckMessageInterval
 	checkMessage.Team = s.TestTeam
 	checkMessage.AliceToken = s.AliceToken
@@ -71,7 +82,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 
 	checkCalls := NewCallsChecker()
 	checkCalls.Host = s.Host
-	checkCalls.Fails = &wsFails
+	checkCalls.Fails = s.wsFails
 	checkCalls.Interval = s.CheckCallInterval
 	checkCalls.Team = s.TestTeam
 	checkCalls.AliceToken = s.AliceToken
@@ -94,7 +105,7 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
 
-		n := wsFails
+		n := s.wsFails
 		//if n == 1 { // XXX:
 		//	n = 0
 		//}
@@ -108,21 +119,14 @@ func ServerWatch(s Server, rtr *mux.Router) {
 	})
 }
 
-type Server struct {
-	Host string `yaml:"host"`
-
-	TestTeam   string `yaml:"test_team"`
-	AliceToken string `yaml:"alice_token"`
-	BobToken   string `yaml:"bob_token"`
-	Verbose    bool   `yaml:"verbose"`
-
-	ApiPingInterval         time.Duration `yaml:"api_ping_interval"`
-	NginxPingInterval       time.Duration `yaml:"nginx_ping_interval"`
-	WsPingInterval          time.Duration `yaml:"ws_ping_interval"`
-	MaxServerOnlineInterval time.Duration `yaml:"max_server_online_interval"`
-	CheckMessageInterval    time.Duration `yaml:"check_message_interval"`
-	CheckCallInterval       time.Duration `yaml:"check_call_interval"`
-	AdminPingInterval       time.Duration `yaml:"admin_ping_interval"`
-	UServerPingInterval     time.Duration `yaml:"userver_ping_interval"`
-	UServerPingPath         string        `yaml:"userver_ping_path"`
+func (s *Server) wsFailsHarakiri() {
+	for range time.Tick(5 * time.Second) {
+		if s.wsFails > s.MaxWsFails {
+			log.Panicln("too many ws fails:", s.wsFails, ">", s.MaxWsFails)
+		}
+		if s.wsFails > 0 {
+			s.wsFails--
+			log.Println("decrease fails to", s.wsFails)
+		}
+	}
 }

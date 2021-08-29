@@ -32,7 +32,7 @@ type BaseUserChecker struct {
 	AliceToken string
 	BobToken   string
 	Verbose    bool
-	Fails      *int
+	Fails      int
 
 	aliceSession   *tdclient.Session
 	aliceWsSession *tdclient.WsSession
@@ -64,10 +64,10 @@ func (p *BaseUserChecker) Start() {
 			return
 		}
 
-		*p.Fails++
+		p.Fails++
 
-		log.Printf("[%s] %s: fail #%d, %s", p.Host, p.Name, *p.Fails, err)
-		time.Sleep(3*time.Second)
+		log.Printf("[%s] %s: fail #%d, %s", p.Host, p.Name, p.Fails, err)
+		time.Sleep(3 * time.Second)
 
 		if p.aliceWsSession != nil {
 			log.Printf("[%s] %s: reset alice session", p.Host, p.Name)
