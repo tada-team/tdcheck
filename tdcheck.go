@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +16,7 @@ func main() {
 	configPathPtr := flag.String("config", "/etc/tdcheck/default.yml", "path to config")
 	flag.Parse()
 
-	b, err := ioutil.ReadFile(*configPathPtr)
+	b, err := os.ReadFile(*configPathPtr)
 	if err != nil {
 		log.Println("config error:", err)
 		os.Exit(1)
