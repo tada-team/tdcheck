@@ -146,3 +146,16 @@ func (p *BaseUserChecker) auth(token string, onfail func(error)) (*tdclient.Sess
 
 	return &session, wsSession, nil
 }
+
+func roundMilliseconds(theDuration time.Duration) int64 {
+	actualMilliseconds := theDuration.Milliseconds()
+	if actualMilliseconds != 0 {
+		return actualMilliseconds
+	}
+
+	if theDuration == 0 {
+		return 0
+	}
+
+	return 1
+}

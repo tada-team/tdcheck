@@ -30,10 +30,10 @@ type messageChecker struct {
 func (p *messageChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, p.echoMessageDuration.Milliseconds()))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.echoMessageDuration)))
 
 		_, _ = io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", p.Host, p.checkMessageDuration.Milliseconds()))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.checkMessageDuration)))
 	}
 }
 

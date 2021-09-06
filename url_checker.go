@@ -37,7 +37,7 @@ func (p *UrlChecker) GetName() string { return p.Name }
 func (p *UrlChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, fmt.Sprintf("# TYPE %s gauge\n", p.Name))
-		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.Host, p.duration.Milliseconds()))
+		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.Host, roundMilliseconds(p.duration)))
 	}
 }
 

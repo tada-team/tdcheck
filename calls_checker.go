@@ -30,7 +30,7 @@ type callsChecker struct {
 func (p *callsChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", p.Host, p.duration.Milliseconds()))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.duration)))
 	}
 }
 
@@ -58,7 +58,7 @@ func (p *callsChecker) doCheck() error {
 	}
 
 	start := time.Now()
-	callDuration := 5* time.Second
+	callDuration := 5 * time.Second
 
 	peerConnection, offer, _, err := p.newPeerConnection()
 	if err != nil {
