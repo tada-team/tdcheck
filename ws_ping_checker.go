@@ -30,11 +30,6 @@ func (p *wsPingChecker) Report(w io.Writer) {
 
 func (p *wsPingChecker) doCheck() error {
 	p.duration = 0
-	defer func() {
-		if p.duration == 0 {
-			p.duration = p.Interval
-		}
-	}()
 
 	start := time.Now()
 	v := p.aliceWsSession.Ping()

@@ -40,14 +40,6 @@ func (p *messageChecker) Report(w io.Writer) {
 func (p *messageChecker) doCheck() error {
 	p.echoMessageDuration = 0
 	p.checkMessageDuration = 0
-	defer func() {
-		if p.echoMessageDuration == 0 {
-			p.echoMessageDuration = p.Interval
-			p.checkMessageDuration = p.Interval
-		} else if p.checkMessageDuration == 0 {
-			p.checkMessageDuration = p.Interval
-		}
-	}()
 
 	if p.bobJid.Empty() {
 		contact, err := p.bobSession.Me(p.Team)
