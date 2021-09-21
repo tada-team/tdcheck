@@ -27,6 +27,9 @@ func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker 
 		Name:     name,
 		Path:     path,
 		Interval: interval,
+		client: http.Client{
+			Timeout: time.Second * 10,
+		},
 	}
 }
 
@@ -54,11 +57,11 @@ func (p *UrlChecker) Start() {
 		content, err := p.checkContent()
 		if err != nil {
 			log.Printf("[%s] %s: %s fail: %v", p.Host, p.Name, p.duration.Round(time.Millisecond), err)
-			p.duration = p.Interval
+			p.duration = 0
 			continue
 		} else if len(content) == 0 {
 			log.Printf("[%s] %s: %s empty content", p.Host, p.Name, p.duration.Round(time.Millisecond))
-			p.duration = p.Interval
+			p.duration = 0
 			continue
 		}
 
