@@ -23,13 +23,22 @@ type wsPingChecker struct {
 
 func (p *wsPingChecker) Report(w io.Writer) {
 	if p.Enabled() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
 		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.duration)))
 	}
 }
 
 func (p *wsPingChecker) doCheck() error {
-	p.duration = 0
+	var currentDuration time.Duration = 0
+	defer func() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
+		p.duration = currentDuration
+	}()
 
 	start := time.Now()
 	v := p.aliceWsSession.Ping()
@@ -56,8 +65,8 @@ func (p *wsPingChecker) doCheck() error {
 			continue
 		}
 
-		p.duration = time.Since(start)
-		log.Printf("[%s] %s: got %s (%s)", p.Host, p.Name, v, p.duration.Round(time.Millisecond))
+		currentDuration = time.Since(start)
+		log.Printf("[%s] %s: got %s (%dms)", p.Host, p.Name, v, roundMilliseconds(currentDuration))
 
 		break
 	}

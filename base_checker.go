@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -41,6 +42,8 @@ type BaseUserChecker struct {
 	bobWsSession *tdclient.WsSession
 
 	do func() error // hack for inheritance
+
+	updateDurationMutex sync.Mutex
 }
 
 func (p *BaseUserChecker) GetName() string { return p.Name }

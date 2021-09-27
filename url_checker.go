@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -19,6 +20,8 @@ type UrlChecker struct {
 
 	duration time.Duration
 	client   http.Client
+
+	updateDurationMutex sync.Mutex
 }
 
 func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker {
@@ -39,6 +42,9 @@ func (p *UrlChecker) GetName() string { return p.Name }
 
 func (p *UrlChecker) Report(w io.Writer) {
 	if p.Enabled() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
 		_, _ = io.WriteString(w, fmt.Sprintf("# TYPE %s gauge\n", p.Name))
 		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.Host, roundMilliseconds(p.duration)))
 	}
@@ -53,22 +59,31 @@ func (p *UrlChecker) Start() {
 	defer ticker.Stop()
 
 	for {
-		start := time.Now()
-		content, err := p.checkContent()
-		if err != nil {
-			log.Printf("[%s] %s: %s fail: %v", p.Host, p.Name, p.duration.Round(time.Millisecond), err)
-			p.duration = 0
-			continue
-		} else if len(content) == 0 {
-			log.Printf("[%s] %s: %s empty content", p.Host, p.Name, p.duration.Round(time.Millisecond))
-			p.duration = 0
-			continue
-		}
+		func() {
+			var currentDuration time.Duration = 0
+			defer func() {
+				p.updateDurationMutex.Lock()
+				defer p.updateDurationMutex.Unlock()
 
-		p.duration = time.Since(start)
-		size := humanize.Bytes(uint64(len(content)))
-		log.Printf("[%s] %s: %s (%s)", p.Host, p.Name, p.duration.Round(time.Millisecond), size)
+				p.duration = currentDuration
+			}()
 
+			start := time.Now()
+			content, err := p.checkContent()
+			if err != nil {
+				log.Printf("[%s] %s: %dms fail: %v", p.Host, p.Name, roundMilliseconds(currentDuration), err)
+				currentDuration = 0
+				return
+			} else if len(content) == 0 {
+				log.Printf("[%s] %s: %dms empty content", p.Host, p.Name, roundMilliseconds(currentDuration))
+				currentDuration = 0
+				return
+			}
+
+			currentDuration = time.Since(start)
+			size := humanize.Bytes(uint64(len(content)))
+			log.Printf("[%s] %s: %dms (%s)", p.Host, p.Name, roundMilliseconds(currentDuration), size)
+		}()
 		<-ticker.C
 	}
 }

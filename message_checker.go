@@ -29,6 +29,9 @@ type messageChecker struct {
 
 func (p *messageChecker) Report(w io.Writer) {
 	if p.Enabled() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
 		_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.echoMessageDuration)))
 
@@ -38,8 +41,15 @@ func (p *messageChecker) Report(w io.Writer) {
 }
 
 func (p *messageChecker) doCheck() error {
-	p.echoMessageDuration = 0
-	p.checkMessageDuration = 0
+	var currentEchoMessageDuration time.Duration = 0
+	var currentCheckMessageDuration time.Duration = 0
+	defer func() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
+		p.echoMessageDuration = currentEchoMessageDuration
+		p.checkMessageDuration = currentCheckMessageDuration
+	}()
 
 	if p.bobJid.Empty() {
 		contact, err := p.bobSession.Me(p.Team)
@@ -71,12 +81,12 @@ func (p *messageChecker) doCheck() error {
 			continue
 		}
 
-		log.Printf("[%s] %s: alice got echo `%s` (%s)", p.Host, p.Name, msg.PushText, p.echoMessageDuration.Round(time.Millisecond))
-		p.echoMessageDuration = time.Since(start)
+		currentEchoMessageDuration = time.Since(start)
+		log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.Host, p.Name, msg.PushText, roundMilliseconds(currentEchoMessageDuration))
 		break
 	}
 
-	if p.echoMessageDuration > 0 {
+	if currentEchoMessageDuration > 0 {
 		numTimeouts := 0
 		for time.Since(start) < p.Interval && p.bobWsSession != nil {
 			msg, delayed, err := p.bobWsSession.WaitForMessage()
@@ -93,8 +103,8 @@ func (p *messageChecker) doCheck() error {
 				continue
 			}
 
-			p.checkMessageDuration = time.Since(start)
-			log.Printf("[%s] %s: bob got `%s` (%s)", p.Host, p.Name, msg.PushText, p.checkMessageDuration.Round(time.Millisecond))
+			currentCheckMessageDuration = time.Since(start)
+			log.Printf("[%s] %s: bob got `%s` (%dms)", p.Host, p.Name, msg.PushText, roundMilliseconds(currentCheckMessageDuration))
 
 			break
 		}

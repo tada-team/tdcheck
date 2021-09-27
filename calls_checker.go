@@ -29,12 +29,23 @@ type callsChecker struct {
 
 func (p *callsChecker) Report(w io.Writer) {
 	if p.Enabled() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
 		_, _ = io.WriteString(w, "# TYPE tdcheck_calls_ms gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.duration)))
 	}
 }
 
 func (p *callsChecker) doCheck() error {
+	var currentDuration time.Duration = 0
+	defer func() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
+		p.duration = currentDuration
+	}()
+
 	if p.bobJid.Empty() || p.iceServer == "" {
 		contact, err := p.bobSession.Me(p.Team)
 		if err != nil {
@@ -62,7 +73,6 @@ func (p *callsChecker) doCheck() error {
 
 	peerConnection, offer, _, err := p.newPeerConnection()
 	if err != nil {
-		p.duration = p.Interval
 		return errors.Wrap(err, "NewPeerConnection fail")
 	}
 	log.Printf("[%s] %s: peer connection created (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
@@ -80,7 +90,6 @@ func (p *callsChecker) doCheck() error {
 
 	callAnswer := new(tdproto.ServerCallAnswer)
 	if err := p.aliceWsSession.WaitFor(callAnswer); err != nil {
-		p.duration = p.Interval
 		return errors.Wrap(err, "ServerCallAnswer timeout")
 	}
 	log.Printf("[%s] %s: got call answer (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
@@ -89,7 +98,6 @@ func (p *callsChecker) doCheck() error {
 		Type: webrtc.SDPTypeAnswer,
 		SDP:  callAnswer.Params.JSEP.SDP,
 	}); err != nil {
-		p.duration = p.Interval
 		return errors.Wrap(err, "SetRemoteDescription fail")
 	}
 	log.Printf("[%s] %s: set remote description (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
@@ -110,8 +118,8 @@ func (p *callsChecker) doCheck() error {
 	}
 	log.Printf("[%s] %s: got server call leave (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
-	p.duration = time.Since(start) - callDuration
-	log.Printf("[%s] %s: ok (%s)", p.Host, p.Name, p.duration.Round(time.Millisecond))
+	currentDuration = time.Since(start) - callDuration
+	log.Printf("[%s] %s: ok (%dms)", p.Host, p.Name, roundMilliseconds(currentDuration))
 
 	// FIXME:
 	//if err := p.bobWsSession.WaitFor(new(tdproto.ServerCallBuzzcancel)); err != nil {
