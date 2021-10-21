@@ -147,7 +147,7 @@ func (p *BaseUserChecker) auth(token string, onfail func(error)) (*tdclient.Sess
 		return nil, nil, errors.Wrap(err, "ws session fail")
 	}
 
-	return &session, wsSession, nil
+	return session, wsSession, nil
 }
 
 func roundMilliseconds(theDuration time.Duration) int64 {

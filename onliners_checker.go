@@ -63,13 +63,13 @@ func (p *onlinersChecker) doCheck() error {
 		if ev.Params.Contacts == nil {
 			p.onliners = 0
 		} else {
-			p.onliners = len(*ev.Params.Contacts)
+			p.onliners = len(ev.Params.Contacts)
 		}
 
 		if ev.Params.Calls == nil {
 			p.calls = 0
 		} else {
-			p.calls = len(*ev.Params.Calls)
+			p.calls = len(ev.Params.Calls)
 		}
 
 		log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), p.onliners, p.calls)

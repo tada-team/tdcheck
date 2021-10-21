@@ -76,7 +76,7 @@ func (p *messageChecker) doCheck() error {
 			return err
 		}
 
-		if !delayed || !msg.Chat.JID().Equal(p.bobJid) || msg.MessageId != messageId {
+		if !delayed || !(msg.Chat.JID().String() == p.bobJid.String()) || msg.MessageId != messageId {
 			log.Printf("[%s] %s: alice skip echo `%s`", p.Host, p.Name, msg.PushText)
 			continue
 		}
