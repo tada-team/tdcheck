@@ -88,15 +88,15 @@ func (p *callsChecker) doCheck() error {
 	p.aliceWsSession.SendCallOffer(p.bobJid, offer.SDP)
 	log.Printf("[%s] %s: call offer sent (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
-	callAnswer := new(tdproto.ServerCallAnswer)
-	if err := p.aliceWsSession.WaitFor(callAnswer); err != nil {
-		return errors.Wrap(err, "ServerCallAnswer timeout")
+	callSdp := new(tdproto.ServerCallSdp)
+	if err := p.aliceWsSession.WaitFor(callSdp); err != nil {
+		return errors.Wrap(err, "ServerCallSdp timeout")
 	}
 	log.Printf("[%s] %s: got call answer (%s)", p.Host, p.Name, time.Since(start).Round(time.Millisecond))
 
 	if err := peerConnection.SetRemoteDescription(webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
-		SDP:  callAnswer.Params.JSEP.SDP,
+		SDP:  callSdp.Params.JSEP.SDP,
 	}); err != nil {
 		return errors.Wrap(err, "SetRemoteDescription fail")
 	}
