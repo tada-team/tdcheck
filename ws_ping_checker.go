@@ -11,7 +11,6 @@ import (
 
 func NewWsPingChecker() *wsPingChecker {
 	p := new(wsPingChecker)
-	p.do = p.doCheck
 	p.Name = "ws_ping_checker"
 	return p
 }
@@ -31,7 +30,7 @@ func (p *wsPingChecker) Report(w io.Writer) {
 	}
 }
 
-func (p *wsPingChecker) doCheck() error {
+func (p *wsPingChecker) DoCheck() error {
 	var currentDuration time.Duration = 0
 	defer func() {
 		p.updateDurationMutex.Lock()
@@ -45,31 +44,27 @@ func (p *wsPingChecker) doCheck() error {
 	log.Printf("[%s] %s: send %s", p.Host, p.Name, v)
 
 	numTimeouts := 0
-	for time.Since(start) < p.Interval {
-		if p.aliceWsSession == nil { // reset
-			return nil
-		}
 
-		confirmId, err := p.aliceWsSession.WaitForConfirm()
-		if err == tdclient.Timeout {
-			numTimeouts++
-			log.Printf("[%s] %s: timeout #%d %s (%s)", p.Host, p.Name, numTimeouts, v, time.Since(start).Round(time.Millisecond))
-			continue
-		} else if err != nil {
-			log.Printf("[%s] %s: fail %s (%s)", p.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
-			return err
-		}
-
-		if confirmId != v {
-			log.Printf("[%s] %s: invalid %s (%s)", p.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
-			continue
-		}
-
-		currentDuration = time.Since(start)
-		log.Printf("[%s] %s: got %s (%dms)", p.Host, p.Name, v, roundMilliseconds(currentDuration))
-
-		break
+	if p.aliceWsSession == nil { // reset
+		return nil
 	}
+
+	confirmId, err := p.aliceWsSession.WaitForConfirm()
+	if err == tdclient.Timeout {
+		numTimeouts++
+		log.Printf("[%s] %s: timeout #%d %s (%s)", p.Host, p.Name, numTimeouts, v, time.Since(start).Round(time.Millisecond))
+
+	} else if err != nil {
+		log.Printf("[%s] %s: fail %s (%s)", p.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
+		return err
+	}
+
+	if confirmId != v {
+		log.Printf("[%s] %s: invalid %s (%s)", p.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
+	}
+
+	currentDuration = time.Since(start)
+	log.Printf("[%s] %s: got %s (%dms)", p.Host, p.Name, v, roundMilliseconds(currentDuration))
 
 	return nil
 }

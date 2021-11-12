@@ -5,9 +5,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/tada-team/tdclient"
 )
 
 type Server struct {
@@ -39,17 +41,45 @@ func (s *Server) Watch(rtr *mux.Router) {
 
 	var checkers []Checker
 
-	apiPing := NewUrlChecker(s.Host, "tdcheck_api_ping_ms", "/api/v4/ping", s.ApiPingInterval)
-	checkers = append(checkers, apiPing)
+	if s.ApiPingInterval > 0 {
+		apiPing := NewUrlChecker(s.Host, "tdcheck_api_ping_ms", "/api/v4/ping", s.ApiPingInterval)
+		checkers = append(checkers, apiPing)
+	}
 
-	nginxPing := NewUrlChecker(s.Host, "tdcheck_nginx_ping_ms", "/ping.txt", s.NginxPingInterval)
-	checkers = append(checkers, nginxPing)
+	if s.NginxPingInterval > 0 {
+		nginxPing := NewUrlChecker(s.Host, "tdcheck_nginx_ping_ms", "/ping.txt", s.NginxPingInterval)
+		checkers = append(checkers, nginxPing)
+	}
 
-	userverPing := NewUrlChecker(s.Host, "tdcheck_userver_ping_ms", s.UServerPingPath, s.UServerPingInterval)
-	checkers = append(checkers, userverPing)
+	if s.UServerPingInterval > 0 {
+		userverPing := NewUrlChecker(s.Host, "tdcheck_userver_ping_ms", s.UServerPingPath, s.UServerPingInterval)
+		checkers = append(checkers, userverPing)
+	}
 
-	adminPing := NewUrlChecker(s.Host, "tdcheck_admin_ping_ms", "/admin/", s.AdminPingInterval)
-	checkers = append(checkers, adminPing)
+	if s.AdminPingInterval > 0 {
+		adminPing := NewUrlChecker(s.Host, "tdcheck_admin_ping_ms", "/admin/", s.AdminPingInterval)
+		checkers = append(checkers, adminPing)
+	}
+
+	aliceSession, err := tdclient.NewSession(ForceScheme(s.Host))
+	if err != nil {
+		panic(err)
+	}
+	aliceSession.SetToken(s.AliceToken)
+	aliceWebsocket, err := aliceSession.Ws(s.TestTeam)
+	if err != nil {
+		panic(err)
+	}
+
+	bobSession, err := tdclient.NewSession(ForceScheme(s.Host))
+	if err != nil {
+		panic(err)
+	}
+	bobSession.SetToken(s.BobToken)
+	bobWebsocket, err := aliceSession.Ws(s.TestTeam)
+	if err != nil {
+		panic(err)
+	}
 
 	wsPing := NewWsPingChecker()
 	wsPing.Host = s.Host
@@ -59,7 +89,15 @@ func (s *Server) Watch(rtr *mux.Router) {
 	wsPing.AliceToken = s.AliceToken
 	wsPing.BobToken = s.BobToken
 	wsPing.Verbose = s.Verbose
-	checkers = append(checkers, wsPing)
+
+	wsPing.aliceSession = aliceSession
+	wsPing.aliceWsSession = aliceWebsocket
+	wsPing.bobSession = bobSession
+	wsPing.bobWsSession = bobWebsocket
+
+	if wsPing.Enabled() {
+		checkers = append(checkers, wsPing)
+	}
 
 	checkOnliners := NewOnlinersChecker()
 	checkOnliners.Host = s.Host
@@ -68,7 +106,15 @@ func (s *Server) Watch(rtr *mux.Router) {
 	checkOnliners.Team = s.TestTeam
 	checkOnliners.AliceToken = s.AliceToken
 	checkOnliners.Verbose = s.Verbose
-	checkers = append(checkers, checkOnliners)
+
+	checkOnliners.aliceSession = aliceSession
+	checkOnliners.aliceWsSession = aliceWebsocket
+	checkOnliners.bobSession = bobSession
+	checkOnliners.bobWsSession = bobWebsocket
+
+	if checkOnliners.Enabled() {
+		checkers = append(checkers, checkOnliners)
+	}
 
 	checkMessage := NewMessageChecker()
 	checkMessage.Host = s.Host
@@ -78,29 +124,20 @@ func (s *Server) Watch(rtr *mux.Router) {
 	checkMessage.AliceToken = s.AliceToken
 	checkMessage.BobToken = s.BobToken
 	checkMessage.Verbose = s.Verbose
-	checkers = append(checkers, checkMessage)
 
-	checkCalls := NewCallsChecker()
-	checkCalls.Host = s.Host
-	checkCalls.Fails = s.wsFails
-	checkCalls.Interval = s.CheckCallInterval
-	checkCalls.Team = s.TestTeam
-	checkCalls.AliceToken = s.AliceToken
-	checkCalls.BobToken = s.BobToken
-	checkCalls.Verbose = s.Verbose
-	checkers = append(checkers, checkCalls)
+	checkMessage.aliceSession = aliceSession
+	checkMessage.aliceWsSession = aliceWebsocket
+	checkMessage.bobSession = bobSession
+	checkMessage.bobWsSession = bobWebsocket
+
+	if checkMessage.Enabled() {
+		checkers = append(checkers, checkMessage)
+	}
 
 	path := "/" + s.Host
 	log.Println("listen path:", path)
 
-	for _, checker := range checkers {
-		if checker.Enabled() {
-			go checker.Start()
-			log.Println(checker.GetName(), "started")
-		} else {
-			log.Println(checker.GetName(), "disabled")
-		}
-	}
+	go checkersDispatch(checkers)
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
@@ -117,6 +154,29 @@ func (s *Server) Watch(rtr *mux.Router) {
 			checker.Report(w)
 		}
 	})
+}
+
+func checkersDispatch(checkers []Checker) {
+	selectCases := make([]reflect.SelectCase, len(checkers))
+
+	for i, checker := range checkers {
+		interval := checker.GetInveral()
+		newTicker := time.NewTicker(interval)
+
+		selectCases[i] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(newTicker.C),
+		}
+	}
+
+	for {
+		chosenIndex, _, _ := reflect.Select(selectCases)
+
+		err := checkers[chosenIndex].DoCheck()
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (s *Server) wsFailsHarakiri() {

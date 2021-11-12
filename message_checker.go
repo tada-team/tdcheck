@@ -13,7 +13,6 @@ import (
 
 func NewMessageChecker() *messageChecker {
 	p := new(messageChecker)
-	p.do = p.doCheck
 	p.Name = "message_checker"
 	return p
 }
@@ -40,7 +39,7 @@ func (p *messageChecker) Report(w io.Writer) {
 	}
 }
 
-func (p *messageChecker) doCheck() error {
+func (p *messageChecker) DoCheck() error {
 	var currentEchoMessageDuration time.Duration = 0
 	var currentCheckMessageDuration time.Duration = 0
 	defer func() {
@@ -66,25 +65,21 @@ func (p *messageChecker) doCheck() error {
 	log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.Host, p.Name, text, messageId)
 
 	numTimeouts := 0
-	for time.Since(start) < p.Interval && p.aliceWsSession != nil {
-		msg, delayed, err := p.aliceWsSession.WaitForMessage()
-		if err == tdclient.Timeout {
-			numTimeouts++
-			log.Printf("[%s] %s: alice timeout #%d on `%s`", p.Host, p.Name, numTimeouts, text)
-			continue
-		} else if err != nil {
-			return err
-		}
 
-		if !delayed || !(msg.Chat.JID().String() == p.bobJid.String()) || msg.MessageId != messageId {
-			log.Printf("[%s] %s: alice skip echo `%s`", p.Host, p.Name, msg.PushText)
-			continue
-		}
-
-		currentEchoMessageDuration = time.Since(start)
-		log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.Host, p.Name, msg.PushText, roundMilliseconds(currentEchoMessageDuration))
-		break
+	msg, delayed, err := p.aliceWsSession.WaitForMessage()
+	if err == tdclient.Timeout {
+		numTimeouts++
+		log.Printf("[%s] %s: alice timeout #%d on `%s`", p.Host, p.Name, numTimeouts, text)
+	} else if err != nil {
+		return err
 	}
+
+	if !delayed || !(msg.Chat.JID().String() == p.bobJid.String()) || msg.MessageId != messageId {
+		log.Printf("[%s] %s: alice skip echo `%s`", p.Host, p.Name, msg.PushText)
+	}
+
+	currentEchoMessageDuration = time.Since(start)
+	log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.Host, p.Name, msg.PushText, roundMilliseconds(currentEchoMessageDuration))
 
 	if currentEchoMessageDuration > 0 {
 		numTimeouts := 0

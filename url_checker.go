@@ -38,6 +38,10 @@ func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker 
 
 func (p *UrlChecker) Enabled() bool { return p.Interval > 0 && p.Path != "" }
 
+func (p *UrlChecker) GetInveral() time.Duration {
+	return p.Interval
+}
+
 func (p *UrlChecker) GetName() string { return p.Name }
 
 func (p *UrlChecker) Report(w io.Writer) {
@@ -50,42 +54,36 @@ func (p *UrlChecker) Report(w io.Writer) {
 	}
 }
 
-func (p *UrlChecker) Start() {
+func (p *UrlChecker) DoCheck() error {
 	if !p.Enabled() {
-		return
+		return nil
 	}
 
-	ticker := time.NewTicker(p.Interval)
-	defer ticker.Stop()
+	var currentDuration time.Duration = 0
+	defer func() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
 
-	for {
-		func() {
-			var currentDuration time.Duration = 0
-			defer func() {
-				p.updateDurationMutex.Lock()
-				defer p.updateDurationMutex.Unlock()
+		p.duration = currentDuration
+	}()
 
-				p.duration = currentDuration
-			}()
-
-			start := time.Now()
-			content, err := p.checkContent()
-			if err != nil {
-				log.Printf("[%s] %s: %dms fail: %v", p.Host, p.Name, roundMilliseconds(currentDuration), err)
-				currentDuration = 0
-				return
-			} else if len(content) == 0 {
-				log.Printf("[%s] %s: %dms empty content", p.Host, p.Name, roundMilliseconds(currentDuration))
-				currentDuration = 0
-				return
-			}
-
-			currentDuration = time.Since(start)
-			size := humanize.Bytes(uint64(len(content)))
-			log.Printf("[%s] %s: %dms (%s)", p.Host, p.Name, roundMilliseconds(currentDuration), size)
-		}()
-		<-ticker.C
+	start := time.Now()
+	content, err := p.checkContent()
+	if err != nil {
+		log.Printf("[%s] %s: %dms fail: %v", p.Host, p.Name, roundMilliseconds(currentDuration), err)
+		currentDuration = 0
+		return err
+	} else if len(content) == 0 {
+		log.Printf("[%s] %s: %dms empty content", p.Host, p.Name, roundMilliseconds(currentDuration))
+		currentDuration = 0
+		return err
 	}
+
+	currentDuration = time.Since(start)
+	size := humanize.Bytes(uint64(len(content)))
+	log.Printf("[%s] %s: %dms (%s)", p.Host, p.Name, roundMilliseconds(currentDuration), size)
+
+	return nil
 }
 
 func (p *UrlChecker) checkContent() ([]byte, error) {

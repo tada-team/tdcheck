@@ -6,25 +6,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/tada-team/tdclient"
 	"github.com/tada-team/tdproto"
 )
 
 func NewOnlinersChecker() *onlinersChecker {
 	p := new(onlinersChecker)
-	p.do = p.doCheck
 	p.Name = "onliners_checker"
-
-	go func() {
-		for range time.Tick(time.Second) {
-			if !p.lastEvent.IsZero() && time.Since(p.lastEvent) > p.Interval {
-				log.Printf("[%s] %s n/a (%s), reset", p.Host, p.Name, time.Since(p.lastEvent).Round(time.Millisecond))
-				p.lastEvent = time.Now()
-				p.onliners = 0
-				p.calls = 0
-			}
-		}
-	}()
 
 	return p
 }
@@ -33,7 +20,6 @@ type onlinersChecker struct {
 	BaseUserChecker
 
 	lastEvent time.Time
-	duration  time.Duration
 	onliners  int
 	calls     int
 }
@@ -47,33 +33,41 @@ func (p *onlinersChecker) Report(w io.Writer) {
 	}
 }
 
-func (p *onlinersChecker) doCheck() error {
+func (p *onlinersChecker) DoCheck() error {
+	var currentOnliners int = 0
+	var currentCalls int = 0
+
+	defer func() {
+		p.updateDurationMutex.Lock()
+		defer p.updateDurationMutex.Unlock()
+
+		p.onliners = currentOnliners
+		p.calls = currentCalls
+	}()
+
 	start := time.Now()
 
-	for time.Since(start) < p.Interval && p.aliceWsSession != nil {
-		ev := new(tdproto.ServerOnline)
-		if err := p.aliceWsSession.WaitFor(ev); err == tdclient.Timeout {
-			continue
-		} else if err != nil {
-			return err
-		}
-
-		p.lastEvent = time.Now()
-
-		if ev.Params.Contacts == nil {
-			p.onliners = 0
-		} else {
-			p.onliners = len(ev.Params.Contacts)
-		}
-
-		if ev.Params.Calls == nil {
-			p.calls = 0
-		} else {
-			p.calls = len(ev.Params.Calls)
-		}
-
-		log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), p.onliners, p.calls)
+	ev := new(tdproto.ServerOnline)
+	err := p.aliceWsSession.WaitFor(ev)
+	if err != nil {
+		return err
 	}
+
+	p.lastEvent = time.Now()
+
+	if ev.Params.Contacts == nil {
+		currentOnliners = 0
+	} else {
+		currentOnliners = len(ev.Params.Contacts)
+	}
+
+	if ev.Params.Calls == nil {
+		currentCalls = 0
+	} else {
+		currentCalls = len(ev.Params.Calls)
+	}
+
+	log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), currentOnliners, currentCalls)
 
 	return nil
 }
