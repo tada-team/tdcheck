@@ -167,6 +167,12 @@ func checkersDispatch(checkers []Checker) {
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(newTicker.C),
 		}
+
+		// Run checkers once on start
+		err := checker.DoCheck()
+		if err != nil {
+			log.Fatalf("Failed to run initial checker %v", err)
+		}
 	}
 
 	for {
