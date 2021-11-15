@@ -58,56 +58,37 @@ func (p *messageChecker) DoCheck() error {
 		p.bobJid = contact.Jid
 	}
 
-	start := time.Now()
+	err := p.aliceWsSession.ForeachMessage(func(c1 chan tdproto.Message, c2 chan error) {
+		text := kozma.Say()
+		start := time.Now()
+		messageId := p.aliceWsSession.SendPlainMessage(p.bobJid, text)
+		log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.Host, p.Name, text, messageId)
+		timeoutTimer := time.After(time.Second * 10)
 
-	text := kozma.Say()
-	messageId := p.aliceWsSession.SendPlainMessage(p.bobJid, text)
-	log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.Host, p.Name, text, messageId)
+		for {
+			select {
+			case m, ok := <-c1:
+				if !ok {
+					c2 <- fmt.Errorf("channel closed")
+					return
+				}
+				if m.Content.Text != text {
+					continue
+				}
 
-	numTimeouts := 0
-
-	msg, delayed, err := p.aliceWsSession.WaitForMessage()
-	if err == tdclient.Timeout {
-		numTimeouts++
-		log.Printf("[%s] %s: alice timeout #%d on `%s`", p.Host, p.Name, numTimeouts, text)
-	} else if err != nil {
-		return err
-	}
-
-	if !delayed || !(msg.Chat.JID().String() == p.bobJid.String()) || msg.MessageId != messageId {
-		log.Printf("[%s] %s: alice skip echo `%s`", p.Host, p.Name, msg.PushText)
-	}
-
-	currentEchoMessageDuration = time.Since(start)
-	log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.Host, p.Name, msg.PushText, roundMilliseconds(currentEchoMessageDuration))
-
-	if currentEchoMessageDuration > 0 {
-		numTimeouts := 0
-		for time.Since(start) < p.Interval && p.bobWsSession != nil {
-			msg, delayed, err := p.bobWsSession.WaitForMessage()
-			if err == tdclient.Timeout {
-				numTimeouts++
-				log.Printf("[%s] %s: bob timeout #%d on `%s`", p.Host, p.Name, numTimeouts, text)
-				continue
-			} else if err != nil {
-				return err
+				currentEchoMessageDuration = time.Since(start)
+				log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.Host, p.Name, m.PushText, roundMilliseconds(currentEchoMessageDuration))
+				c2 <- nil
+				return
+			case <-timeoutTimer:
+				c2 <- tdclient.Timeout
+				return
 			}
-
-			if delayed || msg.MessageId != messageId {
-				log.Printf("[%s] %s: bob skip `%s`", p.Host, p.Name, msg.PushText)
-				continue
-			}
-
-			currentCheckMessageDuration = time.Since(start)
-			log.Printf("[%s] %s: bob got `%s` (%dms)", p.Host, p.Name, msg.PushText, roundMilliseconds(currentCheckMessageDuration))
-
-			break
 		}
-	}
-
-	if p.aliceWsSession != nil {
-		log.Printf("[%s] %s: alice drop `%s`", p.Host, p.Name, text)
-		p.aliceWsSession.DeleteMessage(messageId)
+	})
+	currentCheckMessageDuration = currentEchoMessageDuration
+	if err != nil {
+		return err
 	}
 
 	return nil
