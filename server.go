@@ -63,22 +63,22 @@ func (s *Server) Watch(rtr *mux.Router) {
 
 	aliceSession, err := tdclient.NewSession(ForceScheme(s.Host))
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create alice session: %q", (err))
 	}
 	aliceSession.SetToken(s.AliceToken)
 	aliceWebsocket, err := aliceSession.Ws(s.TestTeam)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create alice websocket: %q", (err))
 	}
 
 	bobSession, err := tdclient.NewSession(ForceScheme(s.Host))
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create bob session: %q", (err))
 	}
 	bobSession.SetToken(s.BobToken)
 	bobWebsocket, err := aliceSession.Ws(s.TestTeam)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to create bob websocket: %q", (err))
 	}
 
 	wsPing := NewWsPingChecker()
@@ -137,7 +137,14 @@ func (s *Server) Watch(rtr *mux.Router) {
 	path := "/" + s.Host
 	log.Println("listen path:", path)
 
-	go checkersDispatch(checkers)
+	readyChannel := make(chan struct{})
+	go checkersDispatch(checkers, readyChannel)
+
+	select {
+	case <-readyChannel:
+	case <-time.After(time.Second * 10):
+		log.Fatalf("Failed to start checkers. Timeout.\n")
+	}
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
@@ -156,7 +163,7 @@ func (s *Server) Watch(rtr *mux.Router) {
 	})
 }
 
-func checkersDispatch(checkers []Checker) {
+func checkersDispatch(checkers []Checker, readyChannel chan struct{}) {
 	selectCases := make([]reflect.SelectCase, len(checkers))
 
 	for i, checker := range checkers {
@@ -175,12 +182,14 @@ func checkersDispatch(checkers []Checker) {
 		}
 	}
 
+	readyChannel <- struct{}{}
+
 	for {
 		chosenIndex, _, _ := reflect.Select(selectCases)
 
 		err := checkers[chosenIndex].DoCheck()
 		if err != nil {
-			panic(err)
+			log.Fatalf("Checker error: %q\n", err)
 		}
 	}
 }
