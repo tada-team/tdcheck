@@ -25,14 +25,12 @@ func ForceScheme(url string) string {
 }
 
 type BaseUserChecker struct {
-	Host       string
-	Name       string
-	Interval   time.Duration
-	Team       string
-	AliceToken string
-	BobToken   string
-	Verbose    bool
-	Fails      int
+	Host     string
+	Name     string
+	Interval time.Duration
+	Team     string
+	//Verbose  bool
+	Fails int
 
 	aliceSession   *tdclient.Session
 	aliceWsSession *tdclient.WsSession
@@ -45,7 +43,7 @@ type BaseUserChecker struct {
 
 func (p *BaseUserChecker) GetName() string { return p.Name }
 
-func (p *BaseUserChecker) Enabled() bool { return p.Interval > 0 && p.Team != "" && p.AliceToken != "" }
+func (p *BaseUserChecker) Enabled() bool { return p.Interval > 0 }
 
 func DoCheck() error {
 	panic("Base checker is called")

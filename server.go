@@ -86,9 +86,6 @@ func (s *Server) Watch(rtr *mux.Router) {
 	wsPing.Fails = s.wsFails
 	wsPing.Interval = s.WsPingInterval
 	wsPing.Team = s.TestTeam
-	wsPing.AliceToken = s.AliceToken
-	wsPing.BobToken = s.BobToken
-	wsPing.Verbose = s.Verbose
 
 	wsPing.aliceSession = aliceSession
 	wsPing.aliceWsSession = aliceWebsocket
@@ -104,8 +101,6 @@ func (s *Server) Watch(rtr *mux.Router) {
 	checkOnliners.Fails = s.wsFails
 	checkOnliners.Interval = s.MaxServerOnlineInterval
 	checkOnliners.Team = s.TestTeam
-	checkOnliners.AliceToken = s.AliceToken
-	checkOnliners.Verbose = s.Verbose
 
 	checkOnliners.aliceSession = aliceSession
 	checkOnliners.aliceWsSession = aliceWebsocket
@@ -121,9 +116,6 @@ func (s *Server) Watch(rtr *mux.Router) {
 	checkMessage.Fails = s.wsFails
 	checkMessage.Interval = s.CheckMessageInterval
 	checkMessage.Team = s.TestTeam
-	checkMessage.AliceToken = s.AliceToken
-	checkMessage.BobToken = s.BobToken
-	checkMessage.Verbose = s.Verbose
 
 	checkMessage.aliceSession = aliceSession
 	checkMessage.aliceWsSession = aliceWebsocket
