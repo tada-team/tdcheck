@@ -5,8 +5,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/tada-team/tdclient"
 )
 
 type Checker interface {
@@ -25,27 +23,19 @@ func ForceScheme(url string) string {
 }
 
 type BaseUserChecker struct {
-	Host     string
 	Name     string
 	Interval time.Duration
 	Team     string
-	//Verbose  bool
-	Fails int
-
-	aliceSession   *tdclient.Session
-	aliceWsSession *tdclient.WsSession
-
-	bobSession   *tdclient.Session
-	bobWsSession *tdclient.WsSession
 
 	updateDurationMutex sync.Mutex
+	parentServer        *Server
 }
 
 func (p *BaseUserChecker) GetName() string { return p.Name }
 
 func (p *BaseUserChecker) Enabled() bool { return p.Interval > 0 }
 
-func DoCheck() error {
+func (p *BaseUserChecker) DoCheck() error {
 	panic("Base checker is called")
 }
 

@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"reflect"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -32,33 +31,45 @@ type Server struct {
 	UServerPingPath         string        `yaml:"userver_ping_path"`
 
 	wsFails int
+
+	lastCheckersRun time.Time
+
+	aliceSession   *tdclient.Session
+	aliceWsSession *tdclient.WsSession
+
+	bobSession   *tdclient.Session
+	bobWsSession *tdclient.WsSession
+
+	checkers []Checker
 }
+
+var defaultUpdateTime time.Duration = time.Second * 10
 
 func (s *Server) Watch(rtr *mux.Router) {
 	if s.MaxWsFails == 0 {
 		s.MaxWsFails = 10
 	}
 
-	var checkers []Checker
+	s.checkers = make([]Checker, 0)
 
 	if s.ApiPingInterval > 0 {
-		apiPing := NewUrlChecker(s.Host, "tdcheck_api_ping_ms", "/api/v4/ping", s.ApiPingInterval)
-		checkers = append(checkers, apiPing)
+		apiPing := NewUrlChecker("tdcheck_api_ping_ms", "/api/v4/ping", s.ApiPingInterval, s)
+		s.checkers = append(s.checkers, apiPing)
 	}
 
 	if s.NginxPingInterval > 0 {
-		nginxPing := NewUrlChecker(s.Host, "tdcheck_nginx_ping_ms", "/ping.txt", s.NginxPingInterval)
-		checkers = append(checkers, nginxPing)
+		nginxPing := NewUrlChecker("tdcheck_nginx_ping_ms", "/ping.txt", s.NginxPingInterval, s)
+		s.checkers = append(s.checkers, nginxPing)
 	}
 
 	if s.UServerPingInterval > 0 {
-		userverPing := NewUrlChecker(s.Host, "tdcheck_userver_ping_ms", s.UServerPingPath, s.UServerPingInterval)
-		checkers = append(checkers, userverPing)
+		userverPing := NewUrlChecker("tdcheck_userver_ping_ms", s.UServerPingPath, s.UServerPingInterval, s)
+		s.checkers = append(s.checkers, userverPing)
 	}
 
 	if s.AdminPingInterval > 0 {
-		adminPing := NewUrlChecker(s.Host, "tdcheck_admin_ping_ms", "/admin/", s.AdminPingInterval)
-		checkers = append(checkers, adminPing)
+		adminPing := NewUrlChecker("tdcheck_admin_ping_ms", "/admin/", s.AdminPingInterval, s)
+		s.checkers = append(s.checkers, adminPing)
 	}
 
 	aliceSession, err := tdclient.NewSession(ForceScheme(s.Host))
@@ -81,65 +92,56 @@ func (s *Server) Watch(rtr *mux.Router) {
 		log.Fatalf("Failed to create bob websocket: %q", (err))
 	}
 
-	wsPing := NewWsPingChecker()
-	wsPing.Host = s.Host
-	wsPing.Fails = s.wsFails
+	s.aliceSession = aliceSession
+	s.aliceWsSession = aliceWebsocket
+	s.bobSession = bobSession
+	s.bobWsSession = bobWebsocket
+
+	wsPing := NewWsPingChecker(s)
 	wsPing.Interval = s.WsPingInterval
 	wsPing.Team = s.TestTeam
 
-	wsPing.aliceSession = aliceSession
-	wsPing.aliceWsSession = aliceWebsocket
-	wsPing.bobSession = bobSession
-	wsPing.bobWsSession = bobWebsocket
-
 	if wsPing.Enabled() {
-		checkers = append(checkers, wsPing)
+		s.checkers = append(s.checkers, wsPing)
 	}
 
-	checkOnliners := NewOnlinersChecker()
-	checkOnliners.Host = s.Host
-	checkOnliners.Fails = s.wsFails
+	checkOnliners := NewOnlinersChecker(s)
 	checkOnliners.Interval = s.MaxServerOnlineInterval
 	checkOnliners.Team = s.TestTeam
 
-	checkOnliners.aliceSession = aliceSession
-	checkOnliners.aliceWsSession = aliceWebsocket
-	checkOnliners.bobSession = bobSession
-	checkOnliners.bobWsSession = bobWebsocket
-
 	if checkOnliners.Enabled() {
-		checkers = append(checkers, checkOnliners)
+		s.checkers = append(s.checkers, checkOnliners)
 	}
 
-	checkMessage := NewMessageChecker()
-	checkMessage.Host = s.Host
-	checkMessage.Fails = s.wsFails
+	checkMessage := NewMessageChecker(s)
 	checkMessage.Interval = s.CheckMessageInterval
 	checkMessage.Team = s.TestTeam
 
-	checkMessage.aliceSession = aliceSession
-	checkMessage.aliceWsSession = aliceWebsocket
-	checkMessage.bobSession = bobSession
-	checkMessage.bobWsSession = bobWebsocket
-
 	if checkMessage.Enabled() {
-		checkers = append(checkers, checkMessage)
+		s.checkers = append(s.checkers, checkMessage)
 	}
 
 	path := "/" + s.Host
 	log.Println("listen path:", path)
 
-	readyChannel := make(chan struct{})
-	go checkersDispatch(checkers, readyChannel)
-
-	select {
-	case <-readyChannel:
-	case <-time.After(time.Second * 10):
-		log.Fatalf("Failed to start checkers. Timeout.\n")
+	s.aliceWsSession.Close()
+	s.bobWsSession.Close()
+	s.lastCheckersRun = time.Now()
+	err = s.runCheckers()
+	if err != nil {
+		log.Fatalf("Failed to run initial checkers: %q", (err))
 	}
 
 	rtr.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] request: %s", s.Host, r.Header.Get("User-agent"))
+
+		if defaultUpdateTime < time.Since(s.lastCheckersRun) {
+			s.lastCheckersRun = time.Now()
+			err := s.runCheckers()
+			if err != nil {
+				log.Fatalf("Failed to run checker: %q", (err))
+			}
+		}
 
 		n := s.wsFails
 		//if n == 1 { // XXX:
@@ -149,51 +151,26 @@ func (s *Server) Watch(rtr *mux.Router) {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_fails gauge\n")
 		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_fails{host=\"%s\"} %d\n", s.Host, n))
 
-		for _, checker := range checkers {
+		for _, checker := range s.checkers {
 			checker.Report(w)
 		}
 	})
 }
 
-func checkersDispatch(checkers []Checker, readyChannel chan struct{}) {
-	selectCases := make([]reflect.SelectCase, len(checkers))
+func (s *Server) runCheckers() error {
+	// TODO: Check for errors
+	s.aliceWsSession.Start()
+	s.bobWsSession.Start()
 
-	for i, checker := range checkers {
-		interval := checker.GetInveral()
-		newTicker := time.NewTicker(interval)
-
-		selectCases[i] = reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(newTicker.C),
-		}
-
-		// Run checkers once on start
+	for _, checker := range s.checkers {
 		err := checker.DoCheck()
 		if err != nil {
-			log.Fatalf("Failed to run initial checker %v", err)
+			log.Printf("Checker %s failed: %q\n", checker.GetName(), err)
 		}
 	}
 
-	readyChannel <- struct{}{}
+	s.aliceWsSession.Close()
+	s.bobWsSession.Close()
 
-	for {
-		chosenIndex, _, _ := reflect.Select(selectCases)
-
-		err := checkers[chosenIndex].DoCheck()
-		if err != nil {
-			log.Fatalf("Checker error: %q\n", err)
-		}
-	}
-}
-
-func (s *Server) wsFailsHarakiri() {
-	for range time.Tick(5 * time.Second) {
-		if s.wsFails > s.MaxWsFails {
-			log.Panicln("too many ws fails:", s.wsFails, ">", s.MaxWsFails)
-		}
-		if s.wsFails > 0 {
-			s.wsFails--
-			log.Println("decrease fails to", s.wsFails)
-		}
-	}
+	return nil
 }

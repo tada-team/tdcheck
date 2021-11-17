@@ -9,9 +9,10 @@ import (
 	"github.com/tada-team/tdclient"
 )
 
-func NewWsPingChecker() *wsPingChecker {
+func NewWsPingChecker(parentServer *Server) *wsPingChecker {
 	p := new(wsPingChecker)
 	p.Name = "ws_ping_checker"
+	p.parentServer = parentServer
 	return p
 }
 
@@ -26,7 +27,7 @@ func (p *wsPingChecker) Report(w io.Writer) {
 		defer p.updateDurationMutex.Unlock()
 
 		_, _ = io.WriteString(w, "# TYPE tdcheck_ws_ping_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.duration)))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_ws_ping_ms{host=\"%s\"} %d\n", p.parentServer.Host, roundMilliseconds(p.duration)))
 	}
 }
 
@@ -40,31 +41,31 @@ func (p *wsPingChecker) DoCheck() error {
 	}()
 
 	start := time.Now()
-	v := p.aliceWsSession.Ping()
-	log.Printf("[%s] %s: send %s", p.Host, p.Name, v)
+	v := p.parentServer.aliceWsSession.Ping()
+	log.Printf("[%s] %s: send %s", p.parentServer.Host, p.Name, v)
 
 	numTimeouts := 0
 
-	if p.aliceWsSession == nil { // reset
+	if p.parentServer.aliceWsSession == nil { // reset
 		return nil
 	}
 
-	confirmId, err := p.aliceWsSession.WaitForConfirm()
+	confirmId, err := p.parentServer.aliceWsSession.WaitForConfirm()
 	if err == tdclient.Timeout {
 		numTimeouts++
-		log.Printf("[%s] %s: timeout #%d %s (%s)", p.Host, p.Name, numTimeouts, v, time.Since(start).Round(time.Millisecond))
+		log.Printf("[%s] %s: timeout #%d %s (%s)", p.parentServer.Host, p.Name, numTimeouts, v, time.Since(start).Round(time.Millisecond))
 
 	} else if err != nil {
-		log.Printf("[%s] %s: fail %s (%s)", p.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
+		log.Printf("[%s] %s: fail %s (%s)", p.parentServer.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
 		return err
 	}
 
 	if confirmId != v {
-		log.Printf("[%s] %s: invalid %s (%s)", p.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
+		log.Printf("[%s] %s: invalid %s (%s)", p.parentServer.Host, p.Name, v, time.Since(start).Round(time.Millisecond))
 	}
 
 	currentDuration = time.Since(start)
-	log.Printf("[%s] %s: got %s (%dms)", p.Host, p.Name, v, roundMilliseconds(currentDuration))
+	log.Printf("[%s] %s: got %s (%dms)", p.parentServer.Host, p.Name, v, roundMilliseconds(currentDuration))
 
 	return nil
 }

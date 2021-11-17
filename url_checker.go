@@ -13,10 +13,9 @@ import (
 )
 
 type UrlChecker struct {
-	Host     string
-	Name     string
-	Path     string
-	Interval time.Duration
+	BaseUserChecker
+
+	Path string
 
 	duration time.Duration
 	client   http.Client
@@ -24,12 +23,16 @@ type UrlChecker struct {
 	updateDurationMutex sync.Mutex
 }
 
-func NewUrlChecker(host, name, path string, interval time.Duration) *UrlChecker {
+func NewUrlChecker(name string, path string, interval time.Duration, parentServer *Server) *UrlChecker {
 	return &UrlChecker{
-		Host:     host,
-		Name:     name,
-		Path:     path,
-		Interval: interval,
+		BaseUserChecker: BaseUserChecker{
+			Name:         name,
+			Interval:     interval,
+			parentServer: parentServer,
+		},
+
+		Path: path,
+
 		client: http.Client{
 			Timeout: time.Second * 10,
 		},
@@ -50,7 +53,7 @@ func (p *UrlChecker) Report(w io.Writer) {
 		defer p.updateDurationMutex.Unlock()
 
 		_, _ = io.WriteString(w, fmt.Sprintf("# TYPE %s gauge\n", p.Name))
-		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.Host, roundMilliseconds(p.duration)))
+		_, _ = io.WriteString(w, fmt.Sprintf("%s{host=\"%s\"} %d\n", p.Name, p.parentServer.Host, roundMilliseconds(p.duration)))
 	}
 }
 
@@ -70,24 +73,24 @@ func (p *UrlChecker) DoCheck() error {
 	start := time.Now()
 	content, err := p.checkContent()
 	if err != nil {
-		log.Printf("[%s] %s: %dms fail: %v", p.Host, p.Name, roundMilliseconds(currentDuration), err)
+		log.Printf("[%s] %s: %dms fail: %v", p.parentServer.Host, p.Name, roundMilliseconds(currentDuration), err)
 		currentDuration = 0
 		return err
 	} else if len(content) == 0 {
-		log.Printf("[%s] %s: %dms empty content", p.Host, p.Name, roundMilliseconds(currentDuration))
+		log.Printf("[%s] %s: %dms empty content", p.parentServer.Host, p.Name, roundMilliseconds(currentDuration))
 		currentDuration = 0
 		return err
 	}
 
 	currentDuration = time.Since(start)
 	size := humanize.Bytes(uint64(len(content)))
-	log.Printf("[%s] %s: %dms (%s)", p.Host, p.Name, roundMilliseconds(currentDuration), size)
+	log.Printf("[%s] %s: %dms (%s)", p.parentServer.Host, p.Name, roundMilliseconds(currentDuration), size)
 
 	return nil
 }
 
 func (p *UrlChecker) checkContent() ([]byte, error) {
-	req, err := http.NewRequest("GET", ForceScheme(p.Host)+p.Path, nil)
+	req, err := http.NewRequest("GET", ForceScheme(p.parentServer.Host)+p.Path, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "new request fail")
 	}

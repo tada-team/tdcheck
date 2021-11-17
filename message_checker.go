@@ -11,9 +11,10 @@ import (
 	"github.com/tada-team/tdproto"
 )
 
-func NewMessageChecker() *messageChecker {
+func NewMessageChecker(parentServer *Server) *messageChecker {
 	p := new(messageChecker)
 	p.Name = "message_checker"
+	p.parentServer = parentServer
 	return p
 }
 
@@ -32,10 +33,10 @@ func (p *messageChecker) Report(w io.Writer) {
 		defer p.updateDurationMutex.Unlock()
 
 		_, _ = io.WriteString(w, "# TYPE tdcheck_echo_message_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.echoMessageDuration)))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_echo_message_ms{host=\"%s\"} %d\n", p.parentServer.Host, roundMilliseconds(p.echoMessageDuration)))
 
 		_, _ = io.WriteString(w, "# TYPE tdcheck_check_message_ms gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", p.Host, roundMilliseconds(p.checkMessageDuration)))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_check_message_ms{host=\"%s\"} %d\n", p.parentServer.Host, roundMilliseconds(p.checkMessageDuration)))
 	}
 }
 
@@ -51,18 +52,18 @@ func (p *messageChecker) DoCheck() error {
 	}()
 
 	if p.bobJid.Empty() {
-		contact, err := p.bobSession.Me(p.Team)
+		contact, err := p.parentServer.bobSession.Me(p.Team)
 		if err != nil {
 			return err
 		}
 		p.bobJid = contact.Jid
 	}
 
-	err := p.aliceWsSession.ForeachMessage(func(c1 chan tdproto.Message, c2 chan error) {
+	err := p.parentServer.aliceWsSession.ForeachMessage(func(c1 chan tdproto.Message, c2 chan error) {
 		text := kozma.Say()
 		start := time.Now()
-		messageId := p.aliceWsSession.SendPlainMessage(p.bobJid, text)
-		log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.Host, p.Name, text, messageId)
+		messageId := p.parentServer.aliceWsSession.SendPlainMessage(p.bobJid, text)
+		log.Printf("[%s] %s: alice send `%s` (uid: %s)", p.parentServer.Host, p.Name, text, messageId)
 		timeoutTimer := time.After(time.Second * 10)
 
 		for {
@@ -77,7 +78,7 @@ func (p *messageChecker) DoCheck() error {
 				}
 
 				currentEchoMessageDuration = time.Since(start)
-				log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.Host, p.Name, m.PushText, roundMilliseconds(currentEchoMessageDuration))
+				log.Printf("[%s] %s: alice got echo `%s` (%dms)", p.parentServer.Host, p.Name, m.PushText, roundMilliseconds(currentEchoMessageDuration))
 				c2 <- nil
 				return
 			case <-timeoutTimer:

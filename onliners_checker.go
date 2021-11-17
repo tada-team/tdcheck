@@ -9,10 +9,10 @@ import (
 	"github.com/tada-team/tdproto"
 )
 
-func NewOnlinersChecker() *onlinersChecker {
+func NewOnlinersChecker(parentServer *Server) *onlinersChecker {
 	p := new(onlinersChecker)
 	p.Name = "onliners_checker"
-
+	p.parentServer = parentServer
 	return p
 }
 
@@ -27,9 +27,9 @@ type onlinersChecker struct {
 func (p *onlinersChecker) Report(w io.Writer) {
 	if p.Enabled() {
 		_, _ = io.WriteString(w, "# TYPE tdcheck_onliners gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", p.Host, p.onliners))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_onliners{host=\"%s\"} %d\n", p.parentServer.Host, p.onliners))
 		_, _ = io.WriteString(w, "# TYPE tdcheck_calls gauge\n")
-		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", p.Host, p.calls))
+		_, _ = io.WriteString(w, fmt.Sprintf("tdcheck_calls{host=\"%s\"} %d\n", p.parentServer.Host, p.calls))
 	}
 }
 
@@ -48,7 +48,7 @@ func (p *onlinersChecker) DoCheck() error {
 	start := time.Now()
 
 	ev := new(tdproto.ServerOnline)
-	err := p.aliceWsSession.WaitFor(ev)
+	err := p.parentServer.aliceWsSession.WaitFor(ev)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (p *onlinersChecker) DoCheck() error {
 		currentCalls = len(ev.Params.Calls)
 	}
 
-	log.Printf("[%s] %s %s: %d calls: %d", p.Host, p.Name, time.Since(start).Round(time.Millisecond), currentOnliners, currentCalls)
+	log.Printf("[%s] %s %s: %d calls: %d", p.parentServer.Host, p.Name, time.Since(start).Round(time.Millisecond), currentOnliners, currentCalls)
 
 	return nil
 }
